@@ -1,0 +1,19 @@
+{
+    "name": "clinic/oe-module-ambient-docs",
+    "description": "Ambient Clinical Documentation - AI-powered SOAP note generation",
+    "type": "openemr-module",
+    "version": "1.0.0",
+    "require": {
+        "php": ">=8.2",
+        "guzzlehttp/guzzle": "^7.0",
+        "vlucas/phpdotenv": "^5.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Clinic\\OeModuleAmbientDocs\\": "src/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}

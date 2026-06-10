@@ -1,0 +1,431 @@
+/* ============================================================
+   Ambient Clinical Documentation Widget
+   Styles for the floating recording widget + SOAP note editor
+   ============================================================ */
+
+/* ── Widget Container ──────────────────────────────────────── */
+#ambient-doc-widget {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 360px;
+    background: #ffffff;
+    border: 2px solid #2563EB;
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 8px 32px rgba(37, 99, 235, 0.18);
+    z-index: 99999;
+    font-family: -apple-system, BlinkMacSystemFont,
+                 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px;
+    color: #1F2937;
+    transition: all 0.3s ease;
+}
+
+#ambient-doc-widget.minimized {
+    width: 200px;
+    height: auto;
+}
+
+#ambient-doc-widget.minimized .ambient-body {
+    display: none;
+}
+
+/* ── Header ────────────────────────────────────────────────── */
+.ambient-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.ambient-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ambient-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: #1E40AF;
+}
+
+.ambient-header-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.ambient-icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #6B7280;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.ambient-icon-btn:hover {
+    background: #F3F4F6;
+    color: #374151;
+}
+
+/* ── Recording Indicator ───────────────────────────────────── */
+.rec-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #9CA3AF;
+    flex-shrink: 0;
+    transition: background 0.3s ease;
+}
+
+.rec-indicator.idle       { background: #9CA3AF; }
+.rec-indicator.recording  { background: #EF4444;
+                             animation: pulse-red 1.2s infinite; }
+.rec-indicator.processing { background: #F59E0B;
+                             animation: pulse-amber 1s infinite; }
+.rec-indicator.ready      { background: #10B981; }
+.rec-indicator.done       { background: #7C3AED; }
+.rec-indicator.error      { background: #EF4444; }
+
+@keyframes pulse-red {
+    0%, 100% { opacity: 1;   transform: scale(1);   }
+    50%       { opacity: 0.5; transform: scale(1.3); }
+}
+
+@keyframes pulse-amber {
+    0%, 100% { opacity: 1;   }
+    50%       { opacity: 0.4; }
+}
+
+/* ── Status Text ───────────────────────────────────────────── */
+.ambient-status {
+    font-size: 12px;
+    color: #6B7280;
+    margin-bottom: 14px;
+    min-height: 18px;
+    transition: color 0.3s ease;
+}
+
+.ambient-status.recording  { color: #DC2626; font-weight: 600; }
+.ambient-status.processing { color: #D97706; font-weight: 600; }
+.ambient-status.ready      { color: #059669; font-weight: 600; }
+.ambient-status.error      { color: #DC2626; }
+
+/* ── Recording Timer ───────────────────────────────────────── */
+.ambient-timer {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1E40AF;
+    text-align: center;
+    margin: 8px 0;
+    font-variant-numeric: tabular-nums;
+    display: none;
+}
+
+.ambient-timer.visible { display: block; }
+
+/* ── Word Counter ──────────────────────────────────────────── */
+.ambient-word-count {
+    font-size: 11px;
+    color: #9CA3AF;
+    text-align: center;
+    margin-bottom: 10px;
+    display: none;
+}
+
+.ambient-word-count.visible { display: block; }
+
+/* ── Control Buttons ───────────────────────────────────────── */
+.ambient-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.ambient-btn {
+    flex: 1;
+    padding: 9px 8px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.ambient-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.ambient-btn-start {
+    background: #2563EB;
+    color: #ffffff;
+}
+
+.ambient-btn-start:hover:not(:disabled) {
+    background: #1D4ED8;
+    transform: translateY(-1px);
+}
+
+.ambient-btn-stop {
+    background: #EF4444;
+    color: #ffffff;
+}
+
+.ambient-btn-stop:hover:not(:disabled) {
+    background: #DC2626;
+    transform: translateY(-1px);
+}
+
+/* ── Chunk Upload Progress ─────────────────────────────────── */
+.ambient-progress-bar {
+    height: 3px;
+    background: #E5E7EB;
+    border-radius: 2px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    display: none;
+}
+
+.ambient-progress-bar.visible { display: block; }
+
+.ambient-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #2563EB, #7C3AED);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.4s ease;
+    animation: progress-pulse 2s infinite;
+}
+
+@keyframes progress-pulse {
+    0%, 100% { opacity: 1;   }
+    50%       { opacity: 0.6; }
+}
+
+/* ── Info Banner ───────────────────────────────────────────── */
+.ambient-info-banner {
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 11px;
+    color: #1D4ED8;
+    margin-bottom: 12px;
+    line-height: 1.5;
+    display: none;
+}
+
+.ambient-info-banner.visible { display: block; }
+
+/* ── SOAP Note Editor Panel ────────────────────────────────── */
+#ambient-note-panel {
+    display: none;
+    margin-top: 4px;
+}
+
+#ambient-note-panel.visible { display: block; }
+
+/* ── Individual SOAP Section ───────────────────────────────── */
+.soap-section {
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    transition: border-color 0.2s ease;
+}
+
+.soap-section.accepted { border-color: #10B981; border-width: 2px; }
+.soap-section.rejected { border-color: #EF4444; border-width: 2px; }
+.soap-section.modified { border-color: #F59E0B; border-width: 2px; }
+
+/* Section Header */
+.soap-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #F9FAFB;
+    padding: 7px 10px;
+    border-bottom: 1px solid #E5E7EB;
+    cursor: pointer;
+    user-select: none;
+}
+
+.soap-section-header:hover { background: #F3F4F6; }
+
+.soap-section-title {
+    font-weight: 600;
+    font-size: 12px;
+    color: #374151;
+}
+
+.soap-section-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Confidence Badge */
+.confidence-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 5px;
+    border-radius: 10px;
+    min-width: 32px;
+    text-align: center;
+}
+
+.confidence-high   { background: #D1FAE5; color: #065F46; }
+.confidence-medium { background: #FEF3C7; color: #92400E; }
+.confidence-low    { background: #FEE2E2; color: #991B1B; }
+
+/* Accept/Reject Buttons */
+.section-action-btn {
+    font-size: 11px;
+    padding: 2px 7px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.15s;
+}
+
+.section-action-btn:hover { transform: scale(1.1); }
+
+.btn-accept { background: #D1FAE5; color: #065F46; }
+.btn-accept:hover { background: #A7F3D0; }
+
+.btn-reject { background: #FEE2E2; color: #991B1B; }
+.btn-reject:hover { background: #FECACA; }
+
+/* Section Textarea */
+.soap-textarea {
+    width: 100%;
+    min-height: 64px;
+    max-height: 160px;
+    padding: 9px 10px;
+    border: none;
+    outline: none;
+    font-size: 11px;
+    font-family: inherit;
+    resize: vertical;
+    box-sizing: border-box;
+    line-height: 1.5;
+    transition: background 0.2s, color 0.2s;
+    /* AI-generated text: light blue background */
+    background: #EFF6FF;
+    color: #1D4ED8;
+}
+
+/* When clinician edits: switches to white/black */
+.soap-textarea.user-edited {
+    background: #FFFFFF;
+    color: #111827;
+}
+
+.soap-textarea:focus {
+    background: #FFFFFF;
+    color: #111827;
+    box-shadow: inset 0 0 0 2px #BFDBFE;
+}
+
+/* ── Bottom Action Buttons ─────────────────────────────────── */
+.ambient-note-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.ambient-btn-accept-all {
+    background: #10B981;
+    color: #ffffff;
+}
+
+.ambient-btn-accept-all:hover:not(:disabled) {
+    background: #059669;
+}
+
+.ambient-btn-start-over {
+    background: #6B7280;
+    color: #ffffff;
+}
+
+.ambient-btn-start-over:hover:not(:disabled) {
+    background: #4B5563;
+}
+
+.ambient-btn-insert {
+    flex: 2;
+    background: #7C3AED;
+    color: #ffffff;
+}
+
+.ambient-btn-insert:hover:not(:disabled) {
+    background: #6D28D9;
+    transform: translateY(-1px);
+}
+
+/* ── Microphone Permission Banner ──────────────────────────── */
+.ambient-mic-error {
+    background: #FEF2F2;
+    border: 1px solid #FECACA;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 11px;
+    color: #DC2626;
+    margin-bottom: 10px;
+    display: none;
+}
+
+.ambient-mic-error.visible { display: block; }
+
+/* ── Success Toast ─────────────────────────────────────────── */
+.ambient-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #065F46;
+    color: #ffffff;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 100000;
+    transition: transform 0.3s ease;
+    pointer-events: none;
+}
+
+.ambient-toast.show {
+    transform: translateX(-50%) translateY(0);
+}
+
+/* ── Scrollable note panel ─────────────────────────────────── */
+.ambient-note-scroll {
+    max-height: 380px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.ambient-note-scroll::-webkit-scrollbar {
+    width: 4px;
+}
+
+.ambient-note-scroll::-webkit-scrollbar-track {
+    background: #F3F4F6;
+    border-radius: 2px;
+}
+
+.ambient-note-scroll::-webkit-scrollbar-thumb {
+    background: #D1D5DB;
+    border-radius: 2px;
+}

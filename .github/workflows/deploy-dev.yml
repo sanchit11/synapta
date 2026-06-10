@@ -1,0 +1,35 @@
+name: Deploy to Synapta Health VM (Dev)
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy to VM via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          password: ${{ secrets.VM_PASSWORD }}
+          script: |
+            echo "Deploying to /var/www/html..."
+            sudo git config --global --add safe.directory /var/www/html
+            sudo rm -rf /var/www/html/.git
+            cd /var/www/html
+            sudo git init
+            sudo git remote add origin https://${{ secrets.GH_TOKEN }}@github.com/shirishINET/Synapta_EMR.git
+            sudo git fetch origin
+            sudo git clean -fd
+            sudo git checkout -B dev origin/dev
+            sudo git reset --hard origin/dev
+            sudo chown -R www-data:www-data /var/www/html
+            sudo chmod -R 755 /var/www/html
+            echo "Deployment complete!"

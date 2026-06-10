@@ -1,0 +1,2046 @@
+// ═══════════════════════════════════════════════════════
+// SYNAPTA PROVIDER DASHBOARD — COMPLETE JS REWRITE
+// Matches original synapta_provider_dashboard_V7 behaviour
+// ═══════════════════════════════════════════════════════
+
+// ── Global state ──────────────────────────────────────
+let sydScribeActive  = false;
+let sydCurrentPanel  = null;
+let sydAIPanelOpen   = true;
+
+function sydRenderVitals(data) {
+
+  if (!data || !data.current) {
+    return `<div class="syd-empty">No vitals found</div>`;
+  }
+
+  const v = data.current;
+  const history = data.history || [];
+
+  // Previous BP
+  let prevBP = '';
+  if (history.length > 1) {
+    prevBP = history[history.length - 2].bp;
+  }
+
+  // Build BP graph
+  let points = '';
+let circles = '';
+let labels = '';
+let dates = '';
+
+const startX = 45;
+const gap = 38;
+
+// Get systolic values
+const systolicValues = history.map(h => Number(h.bps) || 0);
+
+// Dynamic min/max range
+const minBP = Math.min(...systolicValues, 110);
+const maxBP = Math.max(...systolicValues, 150);
+
+// SVG chart area
+const topY = 10;
+const bottomY = 60;
+const chartHeight = bottomY - topY;
+
+// Convert BP value to SVG Y coordinate
+function bpToY(bp) {
+
+  return bottomY - (
+    ((bp - minBP) / (maxBP - minBP || 1))
+    * chartHeight
+  );
+}
+
+// Build SVG points
+history.forEach((h, i) => {
+
+  const x = startX + (i * gap);
+
+  const systolic = Number(h.bps) || 0;
+
+  const y = bpToY(systolic);
+
+  points += `${x},${y} `;
+
+  // Color logic
+  let color = '#0F6E56';
+
+  if (systolic >= 140) {
+    color = '#A32D2D';
+  }
+  else if (systolic >= 130) {
+    color = '#C77A0A';
+  }
+
+  // Dots
+  circles += `
+    <circle
+      cx="${x}"
+      cy="${y}"
+      r="4"
+      fill="${color}" />
+  `;
+
+  // Value labels
+  labels += `
+    <text
+      x="${x}"
+      y="${y - 8}"
+      text-anchor="middle"
+      font-size="8"
+      fill="${color}"
+      font-weight="700">
+      ${systolic}
+    </text>
+  `;
+
+  // Dates
+  dates += `
+    <text
+      x="${x}"
+      y="80"
+      text-anchor="middle"
+      font-size="7.5"
+      fill="#888780">
+      ${h.short_date}
+    </text>
+  `;
+});
+
+  // History rows
+  let rows = '';
+
+  [...history].reverse().forEach(h => {
+
+    let cls = 'lv-ok';
+
+    if (h.bps >= 140) {
+      cls = 'lv-hi';
+    } else if (h.bps >= 130) {
+      cls = 'lv-wa';
+    }
+
+    rows += `
+      <div class="lrow">
+        <div class="lname" style="font-size:10px;">${h.date}</div>
+        <div class="lval ${cls}">
+          ${h.bp}
+        </div>
+        <div class="lref">HR ${h.hr || '—'}</div>
+        <div class="ldate">SpO₂ ${h.spo2 || '—'}%</div>
+      </div>
+    `;
+  });
+
+  return `
+
+    <div class="syd-section-label">
+      Current Encounter — ${v.date}
+    </div>
+
+    <div class="vgrid">
+
+      <div class="vi">
+        <div class="vi-lbl">BP</div>
+        <div class="vi-val">
+          ${v.bp} <small class="vi-unit">mmHg</small>
+        </div>
+       
+        ${
+          prevBP
+            ? `<div class="vi-trend">↑ from ${prevBP}</div>`
+            : ''
+        }
+      </div>
+
+      <div class="vi">
+        <div class="vi-lbl">HR</div>
+        <div class="vi-val">${v.hr} <small class="vi-unit">bpm</small></div>
+        
+      </div>
+
+      <div class="vi">
+        <div class="vi-lbl">SpO₂</div>
+        <div class="vi-val">${v.spo2}% <small class="vi-unit">Room air</small></div>
+        
+      </div>
+
+      <div class="vi">
+        <div class="vi-lbl">Temp</div>
+        <div class="vi-val">${v.temp}°F  <small class="vi-unit">Oral</small></div>
+       
+      </div>
+
+      <div class="vi">
+        <div class="vi-lbl">RR</div>
+        <div class="vi-val">${v.rr}  <small class="vi-unit">breaths/min</small></div>
+       
+      </div>
+
+      <div class="vi">
+        <div class="vi-lbl">BMI</div>
+        <div class="vi-val">${v.bmi} <small class="vi-unit">kg/m²</small></div>
+        
+      </div>
+
+    </div>
+
+    <div class="syd-section-label">
+      Blood Pressure Systolic — Last 6 Visits
+    </div>
+
+    <svg viewBox="0 0 280 90"
+     xmlns="http://www.w3.org/2000/svg"
+     style="width:100%;height:90px;overflow:visible;">
+
+  <!-- Grid lines -->
+
+  <line x1="30" y1="10" x2="270" y2="10"
+        stroke="#D3D1C7"
+        stroke-width="0.5"
+        stroke-dasharray="3,3"/>
+
+  <line x1="30" y1="35" x2="270" y2="35"
+        stroke="#D3D1C7"
+        stroke-width="0.5"
+        stroke-dasharray="3,3"/>
+
+  <line x1="30" y1="60" x2="270" y2="60"
+        stroke="#D3D1C7"
+        stroke-width="0.5"
+        stroke-dasharray="3,3"/>
+
+  <!-- 130 reference line -->
+
+  <line x1="30"
+        y1="${bpToY(130)}"
+        x2="270"
+        y2="${bpToY(130)}"
+        stroke="#0F6E56"
+        stroke-width="1"
+        stroke-dasharray="4,3"
+        opacity="0.5"/>
+
+  <text x="272"
+        y="${bpToY(130) + 3}"
+        font-size="7"
+        fill="#0F6E56">
+    130
+  </text>
+
+  <!-- Trend line -->
+
+  <polyline
+    points="${points}"
+    fill="none"
+    stroke="#A32D2D"
+    stroke-width="2.5"
+    stroke-linejoin="round"
+    stroke-linecap="round"/>
+
+  <!-- Dots -->
+  ${circles}
+
+  <!-- Labels -->
+  ${labels}
+
+  <!-- Dates -->
+  ${dates}
+
+  <!-- Bottom axis -->
+
+  <line x1="30"
+        y1="68"
+        x2="270"
+        y2="68"
+        stroke="#D3D1C7"
+        stroke-width="1"/>
+
+</svg>
+
+    <div class="syd-section-label">
+      Past Visit Readings
+    </div>
+
+    ${rows}
+  `;
+}
+
+// ── Panel data config ─────────────────────────────────
+const SYD_PANELS = {
+
+  vitals: {
+  title: '📊 Vitals — History & Trends',
+
+  render: () => `
+    <div id="syd-vitals-panel">
+      <div class="syd-loading">
+        Loading vitals...
+      </div>
+    </div>
+  `
+},
+
+  vitals2: {
+    title: '📊 Vitals — History & Trends',
+    render: () => `
+      <div style="font-size:10px;color:var(--syd-muted);margin-bottom:8px;
+                  font-weight:700;text-transform:uppercase;letter-spacing:.7px;">
+        Current Encounter
+      </div>
+      <div class="syd-dp-grid" id="syd-dp-vitals-grid">
+        <div class="syd-dp-item">
+          <div class="syd-dp-label">Blood Pressure</div>
+          <div class="syd-dp-value" id="dp-bp">—</div>
+          <div class="syd-dp-unit">mmHg</div>
+        </div>
+        <div class="syd-dp-item">
+          <div class="syd-dp-label">Heart Rate</div>
+          <div class="syd-dp-value" id="dp-hr">—</div>
+          <div class="syd-dp-unit">bpm</div>
+        </div>
+        <div class="syd-dp-item">
+          <div class="syd-dp-label">Temperature</div>
+          <div class="syd-dp-value" id="dp-temp">—</div>
+          <div class="syd-dp-unit">°F</div>
+        </div>
+        <div class="syd-dp-item">
+          <div class="syd-dp-label">SpO₂</div>
+          <div class="syd-dp-value" id="dp-spo2">—</div>
+          <div class="syd-dp-unit">%</div>
+        </div>
+        <div class="syd-dp-item">
+          <div class="syd-dp-label">Respirations</div>
+          <div class="syd-dp-value" id="dp-rr">—</div>
+          <div class="syd-dp-unit">breaths/min</div>
+        </div>
+        <div class="syd-dp-item">
+          <div class="syd-dp-label">BMI</div>
+          <div class="syd-dp-value" id="dp-bmi">—</div>
+          <div class="syd-dp-unit">kg/m²</div>
+        </div>
+      </div>`
+  },
+
+  problems: {
+    title: '📋 Problem List',
+    render: () => `
+      <div id="syd-dp-problems-body">
+        <p style="color:#888;font-size:12px;padding:8px 0;">Loading…</p>
+      </div>`
+  },
+
+  medications: {
+    title: '💊 Active Medications',
+    render: () => `
+      <div id="syd-dp-meds-body">
+        <p style="color:#888;font-size:12px;padding:8px 0;">Loading…</p>
+      </div>`
+  },
+
+  labs: {
+    title: '🧪 Labs & Studies',
+    render: () => `
+      <div id="syd-dp-labs-body">
+        <p style="color:#888;font-size:12px;padding:8px 0;">Loading…</p>
+      </div>`
+  },
+
+  allergies: {
+    title: '⚠️ Allergies & Adverse Reactions',
+    render: () => `
+      <div id="syd-dp-allergies-body">
+        <p style="color:#888;font-size:12px;padding:8px 0;">Loading…</p>
+      </div>`
+  },
+  surgical_history: {
+    title: '🔪 Surgical History',
+    render: () => `
+      <div id="syd-dp-surgical-history-body">
+        <p style="color:#888;font-size:12px;padding:8px 0;">Loading…</p>
+      </div>`
+  }
+};
+
+// ── Open a detail panel into the right column ─────────
+function sydOpenPanel(panelKey) {
+  
+  const config  = SYD_PANELS[panelKey];
+  if (!config) return;
+
+  // Toggle: click same card again to close
+  if (sydCurrentPanel === panelKey) {
+    sydClosePanel();
+    return;
+  }
+
+  // Deactivate all cards
+  document.querySelectorAll('.syd-card')
+    .forEach(c => c.classList.remove('syd-card-active'));
+
+  // Activate this card
+  const card = document.getElementById('syd-card-' + panelKey);
+  if (card) card.classList.add('syd-card-active');
+
+  // Show detail header
+  const hdr = document.getElementById('syd-detail-header');
+  const ttl = document.getElementById('syd-detail-ttl');
+  if (hdr) hdr.style.display = 'flex';
+  if (ttl) ttl.textContent   = config.title;
+
+  // Render into right column body
+  const inner = document.getElementById('syd-detail-inner');
+  if (inner) {
+    inner.innerHTML = '<div class="syd-fade">' + config.render() + '</div>';
+  }
+
+  sydCurrentPanel = panelKey;
+
+  // Load real data via AJAX
+  sydLoadPanelData(panelKey);
+}
+
+// ── Close detail panel ────────────────────────────────
+function sydClosePanel() {
+  document.querySelectorAll('.syd-card')
+    .forEach(c => c.classList.remove('syd-card-active'));
+
+  const hdr   = document.getElementById('syd-detail-header');
+  const inner = document.getElementById('syd-detail-inner');
+
+  if (hdr) hdr.style.display = 'none';
+  if (inner) {
+    inner.innerHTML = `
+      <div class="syd-right-placeholder">
+        <div class="syd-rp-icon">☝️</div>
+        <div class="syd-rp-text">
+          Click any card above —<br>
+          <strong>Vitals · Problem List · Medications<br>
+          Labs & Studies · Allergies</strong><br><br>
+          — to view full history here.
+        </div>
+      </div>`;
+  }
+  sydCurrentPanel = null;
+}
+
+// ── AJAX load panel data ──────────────────────────────
+function sydLoadPanelData(panelKey) {
+  fetch(SYD.webroot
+    + '/interface/modules/custom_modules'
+    + '/oe-module-physician-dashboard/public/ajax.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        action:    panelKey,
+        pid:       SYD.pid,
+        encounter: SYD.encounter,
+        csrf:      SYD.csrf
+      })
+    })
+    .then(r => r.json())
+    .then(data => sydRenderPanelData(panelKey, data))
+    .catch(err => console.error('Synapta panel error:', err));
+}
+
+// ── Render panel data into right column ───────────────
+function sydRenderPanelData(panelKey, data) {
+
+  // if (panelKey === 'vitals' && data.vitals) {
+  //   const v = data.vitals;
+  //   ['bp','hr','temp','spo2','rr','bmi'].forEach(k => {
+  //     const el = document.getElementById('dp-' + k);
+  //     if (el) el.textContent = v[k] || '—';
+  //   });
+  //   return;
+  // }
+
+   if (panelKey === 'vitals') {
+
+    const el = document.getElementById('syd-vitals-panel');
+
+    if (el) {
+      el.innerHTML = sydRenderVitals(data);
+    }
+
+    return;
+  }
+
+  if (panelKey === 'problems' && data.rows !== undefined) {
+    const el = document.getElementById('syd-dp-problems-body');
+    if (!el) return;
+    if (!data.rows.length) {
+      el.innerHTML = '<p style="color:#888;font-size:12px;">No active problems.</p>';
+      return;
+    }
+    el.innerHTML = `<table class="syd-dp-table">
+      <thead><tr><th>Problem</th><th>ICD-10</th><th>Since</th><th>Status</th></tr></thead>
+      <tbody>${data.rows.map(r => `<tr>
+        <td><strong>${r.title}</strong></td>
+        <td style="font-family:var(--syd-mono);font-size:10.5px;color:var(--syd-purple);">
+          ${r.diagnosis || '—'}
+        </td>
+        <td style="color:var(--syd-muted);font-size:11px;">${r.begdate || '—'}</td>
+        <td><span class="syd-status-badge syd-status-complete">Active</span></td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+    return;
+  }
+
+  if (panelKey === 'medications' && data.rows !== undefined) {
+    const el = document.getElementById('syd-dp-meds-body');
+    if (!el) return;
+    if (!data.rows.length) {
+      el.innerHTML = '<p style="color:#888;font-size:12px;">No active medications.</p>';
+      return;
+    }
+    el.innerHTML = `<table class="syd-dp-table">
+      <thead><tr><th>Medication</th><th>Dose</th><th>Route</th><th>Frequency</th><th>Refills</th></tr></thead>
+      <tbody>${data.rows.map(r => `<tr>
+        <td><strong>${r.drug}</strong></td>
+        <td>${r.dosage}</td>
+        
+        <td>${r.route    || '—'}</td>
+        <td>${r.interval || '—'}</td>
+        <td>${r.refills  || '0'}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+    return;
+  }
+
+  if (panelKey === 'labs' && data.rows !== undefined) {
+    const el = document.getElementById('syd-dp-labs-body');
+    if (!el) return;
+    if (!data.rows.length) {
+      el.innerHTML = '<p style="color:#888;font-size:12px;">No recent lab results.</p>';
+      return;
+    }
+    el.innerHTML = `<table class="syd-dp-table">
+      <thead><tr><th>Test</th><th>Result</th><th>Reference</th><th>Status</th><th>Date</th></tr></thead>
+      <tbody>${data.rows.map(r => `<tr>
+        <td>${r.test_name || 'Lab'}</td>
+        <td style="${r.abnormal ? 'color:var(--syd-amber);font-weight:600;' : ''}">
+          ${r.result_text || '—'} ${r.units || ''}
+        </td>
+        <td style="color:var(--syd-muted);font-size:11px;">${r.range || '—'}</td>
+        <td>${r.abnormal
+              ? '<span class="syd-status-badge syd-status-warn">Abnormal</span>'
+              : '<span class="syd-status-badge syd-status-complete">Normal</span>'
+            }</td>
+        <td style="color:var(--syd-muted);font-size:11px;">${r.date_ordered || '—'}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+    return;
+  }
+
+  if (panelKey === 'allergies' && data.rows !== undefined) {
+    const el = document.getElementById('syd-dp-allergies-body');
+    if (!el) return;
+    if (!data.rows.length) {
+      el.innerHTML = `<div style="background:var(--syd-teal-l);border:1px solid rgba(29,158,117,.2);
+        border-radius:8px;padding:12px 14px;font-size:13px;font-weight:600;color:var(--syd-teal-d);">
+        ✅ No Known Drug Allergies (NKDA)</div>`;
+      return;
+    }
+    el.innerHTML = `<table class="syd-dp-table">
+      <thead><tr><th>Allergen</th><th>Reaction</th><th>Severity</th><th>Documented</th></tr></thead>
+      <tbody>${data.rows.map(r => {
+        const sev = (r.severity || '').toLowerCase();
+        const col = sev.includes('sev') || sev.includes('high')
+                    ? 'syd-status-warn'
+                    : 'syd-status-pending';
+        return `<tr>
+          <td><strong>${r.title}</strong></td>
+          <td>${r.reaction  || '—'}</td>
+          <td><span class="syd-status-badge ${col}">${r.severity || 'Unknown'}</span></td>
+          <td style="color:var(--syd-muted);font-size:11px;">${r.begdate || '—'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+    return;
+  }
+
+  if (panelKey === 'surgical_history' && data.rows !== undefined) {
+    const el = document.getElementById('syd-dp-surgical-history-body');
+    if (!el) return;
+    if (!data.rows.length) {
+      el.innerHTML = `<div style="background:var(--syd-teal-l);border:1px solid rgba(29,158,117,.2);
+        border-radius:8px;padding:12px 14px;font-size:13px;font-weight:600;color:var(--syd-teal-d);">
+        ✅ No Known surgical history</div>`;
+      return;
+    }
+    el.innerHTML = `<table class="syd-dp-table">
+      <thead><tr><th>Procedure</th><th>Date</th><th>Discharge</th><th>Notes</th></tr></thead>
+      <tbody>${data.rows.map(r => {
+       
+        return `<tr>
+          <td><strong>${r.title}</strong></td>
+          <td>${r.begdate || '—'}</td>
+          <td>${r.enddate}</td>
+          <td>${r.comments}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+    return;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  TAB SWITCHING
+// ═══════════════════════════════════════════════════════
+function sydSwitchTab(tabKey, el) {
+  document.querySelectorAll('.syd-tab-panel')
+    .forEach(p => { p.classList.remove('active'); p.style.display = 'none'; });
+  document.querySelectorAll('.syd-tab')
+    .forEach(t => t.classList.remove('active'));
+
+  const panel = document.getElementById('syd-tab-' + tabKey);
+  if (panel) {
+    panel.style.display = 'flex';
+    panel.classList.add('active');
+  }
+  if (el) el.classList.add('active');
+
+  // Animate risk meter on summary tab
+  if (tabKey === 'summary') {
+    setTimeout(() => {
+      const fill = document.querySelector('.syd-risk-meter-fill');
+      if (!fill) return;
+      const target = fill.style.width;
+      fill.style.width    = '0%';
+      fill.style.transition = 'none';
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          fill.style.transition = 'width .8s ease';
+          fill.style.width = target;
+        });
+      });
+    }, 100);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  SOAP NOTE EDITOR
+// ═══════════════════════════════════════════════════════
+const SYD_TEMPLATES = {
+  s: `CC: \nHPI: Patient is a [age]-year-old [sex] presenting with [complaint] for [duration].\nOnset: [onset]\nCharacter: [character]\nAssociated symptoms: [symptoms]\nAlleviating: [factors]\nROS: [review of systems]`,
+  o: `General: Alert, NAD, well-appearing.\nVS: See above\nHEENT: [findings]\nCardiovascular: RRR, no murmurs\nPulmonary: CTA bilaterally\nAbdomen: Soft, NT/ND\nExtremities: No edema\nNeuro: A&Ox3`,
+  a: `1. [Primary Diagnosis] — [ICD-10]\n2. [Secondary Diagnosis] — [ICD-10]\nClinical reasoning: [reasoning]`,
+  p: `1. [Medication/intervention]\n2. Labs ordered: [labs]\n3. Imaging: [imaging]\n4. Referrals: [referrals]\n5. Patient education: [education]\n6. Follow up: [timeframe]\n7. Return precautions discussed.`
+};
+
+function sydToggleSection(key) {
+  const body    = document.getElementById('syd-body-' + key);
+  const chevron = document.getElementById('syd-chevron-' + key);
+  if (!body) return;
+  const collapsed = body.classList.contains('collapsed');
+  body.classList.toggle('collapsed', !collapsed);
+  if (chevron) chevron.classList.toggle('collapsed', !collapsed);
+}
+
+function sydExpandAll() {
+  ['s','o','a','p'].forEach(k => {
+    const body    = document.getElementById('syd-body-' + k);
+    const chevron = document.getElementById('syd-chevron-' + k);
+    if (body)    body.classList.remove('collapsed');
+    if (chevron) chevron.classList.remove('collapsed');
+  });
+}
+
+function sydMarkUnsaved() {
+  const badge = document.getElementById('syd-save-status');
+  if (badge) { badge.textContent = 'Unsaved'; badge.className = 'syd-soap-badge'; }
+  ['s','o','a','p'].forEach(k => {
+    const ta = document.getElementById('syd-soap-' + k);
+    const ct = document.getElementById('syd-count-' + k);
+    if (ta && ct) ct.textContent = ta.value.length + ' chars';
+  });
+}
+
+function sydInsertTemplate(key) {
+  const ta = document.getElementById('syd-soap-' + key);
+  if (!ta) return;
+  if (ta.value.trim() && !confirm('Replace current content with template?')) return;
+  ta.value = SYD_TEMPLATES[key] || '';
+  sydMarkUnsaved();
+  ta.focus();
+}
+
+function sydInsertVitals() {
+  const ta    = document.getElementById('syd-soap-o');
+  if (!ta) return;
+  const items = document.querySelectorAll('.syd-vb-item');
+  let str = 'VS: ';
+  items.forEach(item => {
+    const lbl = item.querySelector('.syd-vb-label');
+    const val = item.querySelector('.syd-vb-val');
+    if (lbl && val) str += lbl.textContent + ' ' + val.textContent + '  ';
+  });
+  ta.value = str.trim() + '\n\n' + ta.value;
+  sydMarkUnsaved();
+  sydShowToast('✅ Vitals inserted into Objective', '#1D9E75');
+}
+
+function sydInsertProblem(title, code) {
+  const ta = document.getElementById('syd-soap-a');
+  if (!ta) return;
+  ta.value += (ta.value ? '\n' : '') + (code ? title + ' (' + code + ')' : title);
+  sydMarkUnsaved();
+  ta.focus();
+}
+
+function sydAcceptAI(key) {
+  const txt   = document.getElementById('syd-ai-' + key + '-text');
+  const ta    = document.getElementById('syd-soap-' + key);
+  const box   = document.getElementById('syd-ai-' + key);
+  if (!txt || !ta) return;
+  ta.value = txt.textContent + (ta.value ? '\n\n' + ta.value : '');
+  if (box) box.style.display = 'none';
+  sydMarkUnsaved();
+  sydShowToast('✅ AI draft accepted into ' + key.toUpperCase(), '#1D9E75');
+}
+
+function sydSaveNote() {
+  const s = document.getElementById('syd-soap-s')?.value || '';
+  const o = document.getElementById('syd-soap-o')?.value || '';
+  const a = document.getElementById('syd-soap-a')?.value || '';
+  const p = document.getElementById('syd-soap-p')?.value || '';
+  const btn = document.getElementById('syd-save-btn');
+  if (btn) { btn.textContent = '⏳ Saving…'; btn.disabled = true; }
+
+  fetch(SYD.webroot
+    + '/interface/modules/custom_modules'
+    + '/oe-module-physician-dashboard/public/ajax.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        action:'save_soap', pid:SYD.pid,
+        encounter:SYD.encounter, csrf:SYD.csrf,
+        subjective:s, objective:o, assessment:a, plan:p
+      })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (btn) { btn.textContent = '💾 Save Note'; btn.disabled = false; }
+      if (data.success) {
+        const badge = document.getElementById('syd-save-status');
+        if (badge) { badge.textContent = '✓ Saved'; badge.className = 'syd-soap-badge saved'; }
+        sydShowToast('✅ Note saved successfully', '#0F6E56');
+      } else {
+        sydShowToast('❌ Save failed: ' + (data.error || 'Unknown error'), '#A32D2D');
+      }
+    })
+    .catch(() => {
+      if (btn) { btn.textContent = '💾 Save Note'; btn.disabled = false; }
+      sydShowToast('❌ Network error — note not saved', '#A32D2D');
+    });
+}
+
+function sydSignNote() {
+  if (!confirm('Sign and close this encounter note?')) return;
+  sydSaveNote();
+  const badge = document.getElementById('syd-save-status');
+  if (badge) { badge.textContent = '✓ Signed'; badge.className = 'syd-soap-badge signed'; }
+  const status = document.getElementById('syd-enc-status');
+  if (status) {
+    status.textContent = '✓ Signed';
+    status.style.background  = 'rgba(15,110,86,.25)';
+    status.style.color       = '#4ADE80';
+    status.style.borderColor = 'rgba(15,110,86,.4)';
+  }
+  sydShowToast('✅ Note signed — encounter closed', '#0F6E56');
+}
+
+function sydPrintNote() {
+  const s = document.getElementById('syd-soap-s')?.value || '';
+  const o = document.getElementById('syd-soap-o')?.value || '';
+  const a = document.getElementById('syd-soap-a')?.value || '';
+  const p = document.getElementById('syd-soap-p')?.value || '';
+  const w = window.open('', '_blank');
+  w.document.write(`<html><head><title>SOAP Note</title>
+    <style>body{font-family:sans-serif;padding:40px;font-size:14px;line-height:1.7;}
+    h3{margin:18px 0 6px;color:#333;}pre{white-space:pre-wrap;background:#f5f5f5;
+    padding:12px;border-radius:6px;}</style></head><body>
+    <h2>SOAP Note — ${new Date().toLocaleDateString()}</h2>
+    <h3>S — Subjective</h3><pre>${s||'(empty)'}</pre>
+    <h3>O — Objective</h3><pre>${o||'(empty)'}</pre>
+    <h3>A — Assessment</h3><pre>${a||'(empty)'}</pre>
+    <h3>P — Plan</h3><pre>${p||'(empty)'}</pre>
+    </body></html>`);
+  w.document.close(); w.print();
+}
+
+function sydAddendum() {
+  const ta = document.getElementById('syd-soap-p');
+  if (!ta) return;
+  ta.value += '\n\nADDENDUM [' + new Date().toLocaleString() + ']:\n';
+  ta.focus();
+  sydMarkUnsaved();
+}
+
+function sydClearNote() {
+  if (!confirm('Clear all SOAP note fields?')) return;
+  ['s','o','a','p'].forEach(k => {
+    const ta = document.getElementById('syd-soap-' + k);
+    if (ta) ta.value = '';
+  });
+  sydMarkUnsaved();
+}
+
+// ═══════════════════════════════════════════════════════
+//  SCRIBE — WebRTC RECORDING
+//  Connects to oe-module-ambient-docs api.php:
+//    create_session → upload_chunk (every 30s) →
+//    process_session → sydReceiveDraft()
+// ═══════════════════════════════════════════════════════
+
+// Recording state
+let _scribeRecorder   = null;
+let _scribeStream     = null;
+let _scribeChunks     = [];
+let _scribeSessionId  = null;
+let _scribeChunkTimer = null;
+let _scribeTimerInt   = null;
+let _scribeElapsed    = 0;
+const SCRIBE_CHUNK_MS = 30000; // upload every 30 seconds
+
+function _scribeApiUrl() {
+  return SYD.webroot
+    + '/interface/modules/custom_modules'
+    + '/oe-module-ambient-docs/public/api.php';
+}
+
+// Entry point — called by both the header Scribe button
+// and the "Start Recording" button in the AI Draft panel
+async function sydToggleScribe() {
+  if (!sydScribeActive) {
+    await _scribeStart();
+  } else {
+    await _scribeStop();
+  }
+}
+
+// ── Start recording ───────────────────────────────────
+async function _scribeStart() {
+  // Guard: need both a patient and an encounter to record against
+  if (!SYD.pid || !SYD.encounter) {
+    sydShowToast(
+      '❌ No active encounter — open or create an encounter first',
+      '#A32D2D'
+    );
+    return;
+  }
+
+  // ── Pre-flight: check all backend services are up ─────
+  // This gives a specific diagnostic error BEFORE recording starts
+  // so the user knows exactly what to fix (e.g. start Whisper server)
+  try {
+    const badge = document.getElementById('syd-draft-badge');
+    if (badge) badge.textContent = 'Checking services…';
+
+    const setupRes  = await fetch(_scribeApiUrl() + '?action=check_setup', {
+      method : 'GET',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    });
+    const setupData = await setupRes.json();
+
+    if (!setupData.ok) {
+      // Find the first failing check and report it
+      const failing = Object.entries(setupData.checks || {})
+        .filter(([, c]) => !c.ok)
+        .map(([name, c]) => `${name}: ${c.message}`)
+        .join('\n');
+
+      sydShowToast('❌ Not ready to record:\n' + failing, '#A32D2D', 8000);
+      console.warn('Scribe setup check failed:', setupData.checks);
+      if (badge) badge.textContent = 'Setup required — see alert';
+
+      // Show detailed breakdown in console for easy debugging
+      console.group('Scribe setup details');
+      Object.entries(setupData.checks || {}).forEach(([name, c]) => {
+        const icon = c.ok ? '✅' : '❌';
+        console.log(icon, name + ':', c.message);
+      });
+      console.groupEnd();
+      return;
+    }
+
+    if (badge) badge.textContent = 'Waiting for recording 🎙️';
+  } catch (prefErr) {
+    // If check_setup itself fails (network error etc.) just warn and continue
+    console.warn('Pre-flight check failed (continuing anyway):', prefErr);
+  }
+
+  // Request microphone
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount    : 1,
+        sampleRate      : 16000,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl : true,
+      }
+    });
+  } catch (err) {
+    sydShowToast('❌ Microphone access denied — check browser settings', '#A32D2D');
+    console.error('Scribe mic error:', err);
+    return;
+  }
+
+  // Create backend session
+  try {
+    const res  = await fetch(_scribeApiUrl() + '?action=create_session', {
+      method : 'POST',
+      headers: {
+        'Content-Type'    : 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: JSON.stringify({
+        action      : 'create_session',
+        encounter_id: SYD.encounter,
+        patient_id  : SYD.pid,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    _scribeSessionId = data.session_id;
+  } catch (err) {
+    stream.getTracks().forEach(t => t.stop());
+    sydShowToast('❌ Could not start session: ' + err.message, '#A32D2D');
+    console.error('Scribe create_session error:', err);
+    return;
+  }
+
+  // Set up MediaRecorder (webm/opus preferred — best for Whisper)
+  _scribeStream = stream;
+  _scribeChunks = [];
+  const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+    ? 'audio/webm;codecs=opus'
+    : 'audio/webm';
+
+  _scribeRecorder = new MediaRecorder(stream, { mimeType });
+  _scribeRecorder.ondataavailable = (e) => {
+    if (e.data && e.data.size > 0) _scribeChunks.push(e.data);
+  };
+  _scribeRecorder.onerror = (e) => {
+    console.error('MediaRecorder error:', e.error);
+    sydShowToast('❌ Recording error — ' + e.error.message, '#A32D2D');
+  };
+  _scribeRecorder.start(1000); // collect a data event every 1s
+
+  // Upload chunk every 30 seconds while recording
+  _scribeChunkTimer = setInterval(() => _scribeUploadChunk(false), SCRIBE_CHUNK_MS);
+
+  // Live elapsed-time counter — updates both the header button and the panel display
+  _scribeElapsed = 0;
+  _scribeTimerInt = setInterval(() => {
+    _scribeElapsed++;
+    const m   = String(Math.floor(_scribeElapsed / 60)).padStart(2, '0');
+    const s   = String(_scribeElapsed % 60).padStart(2, '0');
+    const timeStr = `${m}:${s}`;
+    const headerBtn = document.getElementById('syd-scribe-btn');
+    if (headerBtn) headerBtn.innerHTML = `<span class="syd-live-dot"></span> ${timeStr}`;
+    const elapsed = document.getElementById('syd-elapsed-display');
+    if (elapsed) elapsed.textContent = timeStr;
+  }, 1000);
+
+  // Update header button + status indicator
+  sydScribeActive = true;
+  const headerBtn = document.getElementById('syd-scribe-btn');
+  const status    = document.getElementById('syd-aip-status');
+  const badge     = document.getElementById('syd-draft-badge');
+  if (headerBtn) headerBtn.classList.add('syd-recording');
+  if (status) status.innerHTML =
+    '<span class="syd-live-dot"></span>'
+    + ' <span style="color:#F4B0B0;">Recording…</span>';
+  if (badge) badge.textContent = 'Recording in progress…';
+
+  // Swap placeholder → recording-active panel (shows Stop button + timer)
+  const placeholder     = document.getElementById('syd-draft-placeholder');
+  const recordingActive = document.getElementById('syd-recording-active');
+  if (placeholder)     placeholder.style.display     = 'none';
+  if (recordingActive) recordingActive.style.display  = 'block';
+
+  sydShowToast('🎙️ Recording started', '#1D9E75');
+}
+
+// ── Stop recording and generate SOAP note ────────────
+async function _scribeStop() {
+  clearInterval(_scribeChunkTimer);
+  clearInterval(_scribeTimerInt);
+
+  if (_scribeRecorder && _scribeRecorder.state !== 'inactive') {
+    _scribeRecorder.stop();
+  }
+  if (_scribeStream) {
+    _scribeStream.getTracks().forEach(t => t.stop());
+  }
+
+  sydScribeActive = false;
+
+  // Update header button
+  const headerBtn = document.getElementById('syd-scribe-btn');
+  const badge     = document.getElementById('syd-draft-badge');
+  if (headerBtn) { headerBtn.classList.remove('syd-recording'); headerBtn.innerHTML = '<span class="syd-live-dot"></span> Processing…'; }
+  if (badge) badge.textContent = 'Generating note…';
+
+  // Switch recording panel to "processing" state — hide Stop button, show spinner text
+  const recordingActive = document.getElementById('syd-recording-active');
+  if (recordingActive) {
+    recordingActive.innerHTML =
+      '<div style="text-align:center; padding:16px 8px;">'
+      + '<div style="font-size:1.6rem; margin-bottom:8px;">⏳</div>'
+      + '<div style="font-size:0.85rem; color:#9CA3AF;">Transcribing &amp; generating note…</div>'
+      + '</div>';
+  }
+
+  // Wait for final ondataavailable to fire
+  await new Promise(r => setTimeout(r, 800));
+
+  // Upload the last chunk (marked as final)
+  await _scribeUploadChunk(true);
+
+  sydShowToast('🤖 Generating AI SOAP note…', '#534AB7');
+
+  // Generate SOAP note from full transcript
+  await _scribeProcessSession();
+
+  // Hide recording panel — sydReceiveDraft() will show draft sections
+  if (recordingActive) recordingActive.style.display = 'none';
+
+  // Reset header button
+  if (headerBtn) headerBtn.innerHTML = '<span class="syd-live-dot"></span> Scribe — Ready';
+}
+
+// ── Upload current audio buffer to api.php ────────────
+async function _scribeUploadChunk(isFinal) {
+  if (!_scribeChunks.length || !_scribeSessionId) return;
+
+  const blob    = new Blob(_scribeChunks, { type: 'audio/webm' });
+  _scribeChunks = []; // reset buffer for next chunk
+
+  // Skip near-silent chunks (< 1 KB)
+  if (blob.size < 1024) return;
+
+  const form = new FormData();
+  form.append('audio',      blob, 'chunk.webm');
+  form.append('session_id', _scribeSessionId);
+  form.append('is_final',   isFinal ? '1' : '0');
+
+  try {
+    const res  = await fetch(_scribeApiUrl() + '?action=upload_chunk', {
+      method : 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      body   : form,
+    });
+
+    const data = await res.json();
+
+    // ── Server returned an error ──────────────────────────
+    if (!res.ok || data.error) {
+      // Show the real error message from PHP (visible in APP_ENV=local)
+      const detail = data.detail || data.error || `HTTP ${res.status}`;
+      console.error('upload_chunk failed:', detail, data);
+      sydShowToast('❌ Transcription failed: ' + detail, '#A32D2D');
+
+      // Update badge so clinician knows something went wrong
+      const badge = document.getElementById('syd-draft-badge');
+      if (badge) badge.textContent = 'Transcription error';
+      return;
+    }
+
+    // ── Success — update word count ───────────────────────
+    if (data.total_words) {
+      const badge = document.getElementById('syd-draft-badge');
+      if (badge) badge.textContent = data.total_words + ' words transcribed…';
+      const wordsDisplay = document.getElementById('syd-words-display');
+      if (wordsDisplay) wordsDisplay.textContent = data.total_words + ' words transcribed';
+    }
+
+  } catch (err) {
+    // Network-level failure (server unreachable, JSON parse error, etc.)
+    console.error('upload_chunk network error:', err);
+    sydShowToast('❌ Upload failed — check console for details', '#A32D2D');
+  }
+}
+
+// ── Call process_session → receive SOAP note ─────────
+async function _scribeProcessSession() {
+  try {
+    const res  = await fetch(_scribeApiUrl() + '?action=process_session', {
+      method : 'POST',
+      headers: {
+        'Content-Type'    : 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: JSON.stringify({
+        action    : 'process_session',
+        session_id: _scribeSessionId,
+      }),
+    });
+    const data = await res.json();
+
+    if (data.error) {
+      sydShowToast('❌ AI error: ' + data.error, '#A32D2D');
+      const badge = document.getElementById('syd-draft-badge');
+      if (badge) badge.textContent = 'Error — try again';
+      console.error('process_session error:', data);
+      return;
+    }
+
+    // Flatten SOAP sections from structured objects → plain text strings
+    // so sydReceiveDraft() can put them straight into the display divs
+    const soap = data.soap_note || {};
+    const note = {};
+
+    ['subjective', 'objective', 'assessment', 'plan'].forEach(key => {
+      const val = soap[key];
+      if (!val) return;
+      if (typeof val === 'string') {
+        note[key] = val;
+      } else if (typeof val === 'object') {
+        const lines = [];
+        Object.entries(val).forEach(([k, v]) => {
+          if (!v) return;
+          if (Array.isArray(v)) {
+            v.forEach(item => {
+              if (!item) return;
+              if (typeof item === 'object') {
+                lines.push('• ' + Object.values(item).filter(Boolean).join(' '));
+              } else {
+                lines.push('• ' + item);
+              }
+            });
+          } else if (typeof v === 'string' && v.trim()) {
+            const label = k.replace(/_/g, ' ')
+                           .replace(/\b\w/g, c => c.toUpperCase());
+            lines.push(label + ': ' + v);
+          }
+        });
+        note[key] = lines.join('\n');
+      }
+    });
+
+    // Prepend chief complaint into subjective
+    if (soap.chief_complaint) {
+      note.subjective = 'Chief Complaint: ' + soap.chief_complaint
+        + (note.subjective ? '\n\n' + note.subjective : '');
+    }
+
+    // Hand off to the AI Draft Note panel
+    sydReceiveDraft(note);
+
+    // Render drug_interaction from API response into the Drug Alerts card
+    if (data.drug_interaction !== undefined && data.drug_interaction !== null) {
+      const drugAlertsEl = document.getElementById('syd-drug-alerts');
+      if (drugAlertsEl) {
+        const html = sydRenderDrugInteraction(data.drug_interaction);
+        drugAlertsEl.innerHTML = html || '<div class="syd-aip-ok"><span>✅</span> No interactions detected.</div>';
+      }
+    }
+
+  } catch (err) {
+    sydShowToast('❌ Processing failed: ' + err.message, '#A32D2D');
+    const badge = document.getElementById('syd-draft-badge');
+    if (badge) badge.textContent = 'Error — try again';
+    console.error('Scribe process_session error:', err);
+  }
+}
+
+// ── Render drug_interaction API response into #syd-drug-alerts ────────────────
+function sydRenderDrugInteraction(di) {
+  if (!di || !di.data) return '';
+  const d = di.data;
+  const parts = [];
+
+  function sevClass(sev) {
+    const s = (sev || '').toUpperCase();
+    if (s === 'HIGH' || s === 'CONTRAINDICATED') return 'danger';
+    if (s === 'MODERATE')                         return 'warn';
+    return '';
+  }
+  function sevIcon(sev) {
+    const s = (sev || '').toUpperCase();
+    if (s === 'HIGH' || s === 'CONTRAINDICATED') return '🚨';
+    if (s === 'MODERATE')                         return '⚠️';
+    return 'ℹ️';
+  }
+  function sevColor(cls) {
+    if (cls === 'danger') return 'var(--red)';
+    if (cls === 'warn')   return 'var(--amber)';
+    return 'var(--body)';
+  }
+  function label(text) {
+    return `<div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;`
+         + `color:var(--body);margin:8px 0 5px;">${text}</div>`;
+  }
+
+  // ── Summary bar ──────────────────────────────────────────
+  const safe = d.overall_safety_level === 'SAFE';
+  parts.push(
+    `<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:11px;">` +
+      `<span>${safe ? '🛡️' : '⚠️'}</span>` +
+      `<strong>${d.overall_safety_level || ''}</strong>` +
+      `<span style="color:var(--body);">· ${di.active_alerts_count ?? 0} active alert${di.active_alerts_count !== 1 ? 's' : ''}</span>` +
+      (d.report_confidence ? `<span style="margin-left:auto;font-size:10px;color:var(--body);">Confidence: ${Math.round(d.report_confidence * 100)}%</span>` : '') +
+    `</div>`
+  );
+
+  if (d.summary) {
+    parts.push(`<div style="font-size:11px;color:var(--body);margin-bottom:10px;line-height:1.5;">${d.summary}</div>`);
+  }
+
+  // ── Drug-Drug Interactions (deduplicated) ────────────────
+  if (d.drug_drug_interactions && d.drug_drug_interactions.length) {
+    const seen = new Set();
+    const unique = d.drug_drug_interactions.filter(ix => {
+      const key = `${ix.drug_a}|${ix.drug_b}|${ix.mechanism}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    parts.push(label('Drug-Drug Interactions'));
+    unique.forEach(ix => {
+      const cls = sevClass(ix.severity);
+      parts.push(
+        `<div class="syd-drug-alert ${cls}" style="margin-bottom:6px;border-radius:7px;">` +
+          `<div class="syd-da-header" style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">` +
+            `<span class="syd-da-icon">${sevIcon(ix.severity)}</span>` +
+            `<span style="font-weight:700;font-size:12px;flex:1;">${ix.drug_a} + ${ix.drug_b}</span>` +
+            `<span style="font-size:9px;font-weight:700;text-transform:uppercase;color:${sevColor(cls)};">${ix.severity}</span>` +
+          `</div>` +
+          `<div class="syd-da-text">` +
+            (ix.clinical_effect  ? `<div><strong>Effect:</strong> ${ix.clinical_effect}</div>` : '') +
+            (ix.mechanism        ? `<div><strong>Mechanism:</strong> ${ix.mechanism}</div>` : '') +
+            (ix.patient_context_note ? `<div style="margin-top:2px;"><strong>Context:</strong> ${ix.patient_context_note}</div>` : '') +
+            (ix.recommendation   ? `<div style="margin-top:3px;font-style:italic;">${ix.recommendation}</div>` : '') +
+          `</div>` +
+        `</div>`
+      );
+    });
+  }
+
+  // ── Allergy Alerts ───────────────────────────────────────
+  if (d.allergy_alerts && d.allergy_alerts.length) {
+    parts.push(label('Allergy Alerts'));
+    d.allergy_alerts.forEach(al => {
+      const cls = sevClass(al.severity);
+      parts.push(
+        `<div class="syd-drug-alert ${cls}" style="margin-bottom:6px;border-radius:7px;">` +
+          `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">` +
+            `<span>${sevIcon(al.severity)}</span>` +
+            `<span style="font-weight:700;font-size:12px;flex:1;">${al.drug} × ${al.allergen_matched}</span>` +
+            `<span style="font-size:9px;font-weight:700;text-transform:uppercase;color:${sevColor(cls)};">${al.severity || ''}</span>` +
+          `</div>` +
+          `<div class="syd-da-text">` +
+            (al.reaction_type  ? `<div><strong>Reaction:</strong> ${al.reaction_type}</div>` : '') +
+            (al.mechanism      ? `<div><strong>Mechanism:</strong> ${al.mechanism}</div>` : '') +
+            (al.recommendation ? `<div style="margin-top:3px;font-style:italic;">${al.recommendation}</div>` : '') +
+          `</div>` +
+        `</div>`
+      );
+    });
+  }
+
+  // ── Side Effects ─────────────────────────────────────────
+  if (d.side_effects && d.side_effects.length) {
+    parts.push(label('Side Effects'));
+    d.side_effects.forEach(se => {
+      parts.push(
+        `<div class="syd-drug-alert" style="margin-bottom:6px;border-radius:7px;background:var(--purple-l);border:1px solid rgba(83,74,183,.2);">` +
+          `<div style="font-weight:700;font-size:12px;margin-bottom:3px;">💊 ${se.drug}</div>` +
+          `<div class="syd-da-text">` +
+            (se.boxed_warning                 ? `<div style="color:var(--red);font-weight:700;margin-bottom:2px;">⬛ ${se.boxed_warning}</div>` : '') +
+            (se.common  && se.common.length   ? `<div><strong>Common:</strong> ${se.common.join(', ')}</div>` : '') +
+            (se.serious && se.serious.length  ? `<div><strong>Serious:</strong> ${se.serious.join(', ')}</div>` : '') +
+            (se.recommendation                ? `<div style="margin-top:3px;font-style:italic;">${se.recommendation}</div>` : '') +
+          `</div>` +
+        `</div>`
+      );
+    });
+  }
+
+  // ── Dose Warnings ────────────────────────────────────────
+  if (d.dose_warnings && d.dose_warnings.length) {
+    parts.push(label('Dose Check'));
+    d.dose_warnings.forEach(dw => {
+      const ok  = dw.status === 'WITHIN_RANGE';
+      const bg  = ok ? 'background:var(--green-l);border:1px solid rgba(15,110,86,.2);' : '';
+      const col = ok ? 'var(--green)' : 'var(--amber)';
+      parts.push(
+        `<div class="syd-drug-alert ${ok ? '' : 'warn'}" style="margin-bottom:6px;border-radius:7px;${bg}">` +
+          `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">` +
+            `<span>${ok ? '✅' : '⚠️'}</span>` +
+            `<span style="font-weight:700;font-size:12px;flex:1;">${dw.drug}</span>` +
+            `<span style="font-size:9px;font-weight:700;text-transform:uppercase;color:${col};">${(dw.status || '').replace(/_/g, ' ')}</span>` +
+          `</div>` +
+          `<div class="syd-da-text">` +
+            `<div><strong>Prescribed:</strong> ${dw.prescribed_dose || '—'} <span style="color:var(--body);">(range: ${dw.standard_range || '—'})</span></div>` +
+            (dw.toxicity_profile ? `<div style="margin-top:2px;font-style:italic;">${dw.toxicity_profile}</div>` : '') +
+          `</div>` +
+        `</div>`
+      );
+    });
+  }
+
+  // ── Special Population Flags ─────────────────────────────
+  if (d.special_population_flags && d.special_population_flags.length) {
+    parts.push(label('Special Populations'));
+    d.special_population_flags.forEach(sp => {
+      parts.push(
+        `<div class="syd-drug-alert warn" style="margin-bottom:6px;border-radius:7px;">` +
+          `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">` +
+            `<span>🏥</span>` +
+            `<span style="font-weight:700;font-size:12px;">${sp.drug}</span>` +
+          `</div>` +
+          `<div class="syd-da-text">` +
+            (sp.flag_type      ? `<div style="font-size:9px;font-weight:700;color:var(--amber);margin-bottom:2px;">${sp.flag_type}</div>` : '') +
+            (sp.detail         ? `<div>${sp.detail}</div>` : '') +
+            (sp.recommendation ? `<div style="margin-top:3px;font-style:italic;">${sp.recommendation}</div>` : '') +
+          `</div>` +
+        `</div>`
+      );
+    });
+  }
+
+  return parts.join('');
+}
+
+// ═══════════════════════════════════════════════════════
+//  AI PANEL
+// ═══════════════════════════════════════════════════════
+function sydToggleAIPanel() {
+  sydAIPanelOpen = !sydAIPanelOpen;
+  const panel = document.getElementById('syd-ai-panel');
+  const root  = document.getElementById('synapta-dashboard');
+  if (!panel) return;
+  if (sydAIPanelOpen) {
+    panel.style.display = 'flex';
+    if (root) root.style.gridTemplateColumns = '62px 1fr 300px';
+  } else {
+    panel.style.display = 'none';
+    if (root) root.style.gridTemplateColumns = '62px 1fr 0';
+  }
+}
+
+function sydDismissAlert(btn) {
+  const el = btn.closest('.syd-drug-alert');
+  if (el) {
+    el.style.transition = 'opacity .3s, max-height .3s';
+    el.style.opacity    = '0';
+    el.style.maxHeight  = '0';
+    setTimeout(() => el.remove(), 350);
+  }
+}
+
+function sydRefreshIntelligence() {
+  const btn = document.querySelector('.syd-aip-refresh');
+  if (btn) {
+    btn.style.transition  = 'transform .5s ease';
+    btn.style.transform   = 'rotate(360deg)';
+    setTimeout(() => { btn.style.transform = ''; }, 500);
+  }
+  sydShowToast('🔄 Intelligence refreshed', '#1D9E75');
+}
+
+// ── Receive AI draft from scribe ──────────────────────
+function sydReceiveDraft(note) {
+  const placeholder = document.getElementById('syd-draft-placeholder');
+  const sections    = document.getElementById('syd-draft-sections');
+  const badge       = document.getElementById('syd-draft-badge');
+  if (placeholder) placeholder.style.display = 'none';
+  if (sections)    sections.style.display    = 'block';
+  if (badge) { badge.textContent = 'Ready to review'; badge.className = 'syd-aip-badge ready'; }
+  const map = { s:'subjective', o:'objective', a:'assessment', p:'plan' };
+  Object.entries(map).forEach(([key, field]) => {
+    const el = document.getElementById('syd-ds-' + key + '-text');
+    if (el && note[field]) el.textContent = note[field];
+  });
+  sydShowToast('🤖 AI draft note ready — review in the AI panel', '#534AB7');
+}
+
+function sydAcceptDraftSection(key) {
+  const txt = document.getElementById('syd-ds-' + key + '-text')?.textContent;
+  const ta  = document.getElementById('syd-soap-' + key);
+  if (!txt || !ta) return;
+  ta.value = txt + (ta.value ? '\n\n' + ta.value : '');
+  sydMarkUnsaved();
+  const sec = document.getElementById('syd-ds-' + key);
+  if (sec) {
+    sec.style.opacity = '.5';
+    const acceptBtn = sec.querySelector('.syd-ds-accept');
+    if (acceptBtn) { acceptBtn.textContent = '✓ Accepted'; acceptBtn.disabled = true; }
+  }
+  sydShowToast('✅ ' + key.toUpperCase() + ' section accepted', '#1D9E75');
+}
+
+function sydAcceptAllDraft() {
+  ['s','o','a','p'].forEach(key => {
+    const txt = document.getElementById('syd-ds-' + key + '-text')?.textContent;
+    const ta  = document.getElementById('syd-soap-' + key);
+    if (txt && ta && txt.trim()) ta.value = txt;
+  });
+  sydMarkUnsaved();
+  document.querySelectorAll('.syd-draft-section').forEach(s => s.style.opacity = '.5');
+  document.querySelectorAll('.syd-ds-accept').forEach(b => { b.textContent = '✓ Accepted'; b.disabled = true; });
+  sydShowToast('✅ All sections accepted from AI draft', '#1D9E75');
+}
+
+function sydDiscardDraft() {
+  if (!confirm('Discard the AI draft note?')) return;
+  const ph  = document.getElementById('syd-draft-placeholder');
+  const sec = document.getElementById('syd-draft-sections');
+  const bdg = document.getElementById('syd-draft-badge');
+  if (ph)  ph.style.display  = 'flex';
+  if (sec) sec.style.display = 'none';
+  if (bdg) { bdg.textContent = 'Waiting for recording'; bdg.className = 'syd-aip-badge'; }
+}
+
+// ── AI suggest billing codes ──────────────────────────
+function sydSuggestCodes() {
+  const btn  = document.getElementById('syd-suggest-codes-btn');
+  const out  = document.getElementById('syd-suggested-codes');
+  const assm = document.getElementById('syd-soap-a')?.value || '';
+  const plan = document.getElementById('syd-soap-p')?.value || '';
+  if (!assm && !plan) {
+    sydShowToast('⚠️ Complete Assessment and Plan first', '#A32D2D');
+    return;
+  }
+  if (btn) { btn.textContent = '⏳ Analysing…'; btn.disabled = true; }
+  fetch(SYD.webroot
+    + '/interface/modules/custom_modules'
+    + '/oe-module-physician-dashboard/public/ajax.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        action:'suggest_codes', pid:SYD.pid,
+        encounter:SYD.encounter, csrf:SYD.csrf,
+        assessment:assm, plan:plan
+      })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (btn) { btn.textContent = '🤖 AI Suggest Codes'; btn.disabled = false; }
+      if (out && data.codes?.length) {
+        out.innerHTML = data.codes.map(c =>
+          `<div class="syd-chip-row" style="margin-bottom:4px;">
+             <span class="syd-ck ${c.type==='ICD-10'?'dx':'cpt'}"
+                   onclick="navigator.clipboard?.writeText('${c.code}');sydShowToast('Copied: ${c.code}','#534AB7')">
+               ${c.code}
+             </span>
+             <span style="font-size:11px;color:var(--syd-muted);">${c.description}</span>
+           </div>`
+        ).join('');
+        sydShowToast('✅ ' + data.codes.length + ' codes suggested', '#534AB7');
+      }
+    })
+    .catch(() => {
+      if (btn) { btn.textContent = '🤖 AI Suggest Codes'; btn.disabled = false; }
+    });
+}
+
+// ═══════════════════════════════════════════════════════
+//  VISIT HISTORY FILTERS
+// ═══════════════════════════════════════════════════════
+function sydFilterHistory(term) {
+  const rows = document.querySelectorAll('.syd-vrow[data-search]');
+  const q    = term.toLowerCase().trim();
+  rows.forEach(row => {
+    const txt = row.dataset.search || '';
+    row.style.display = (!q || txt.includes(q)) ? '' : 'none';
+  });
+}
+
+function sydFilterOrders(filter, btn) {
+  document.querySelectorAll('#syd-order-filters .syd-filter-pill')
+    .forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.querySelectorAll('.syd-order-row').forEach(row => {
+    const st = row.dataset.status || '';
+    if (filter === 'all') { row.style.display = ''; return; }
+    if (filter === 'referral') { row.style.display = st === 'referral' ? '' : 'none'; return; }
+    row.style.display = st === filter ? '' : 'none';
+  });
+}
+
+function sydFilterBilling(filter, btn) {
+  document.querySelectorAll('.syd-bill-filters .syd-filter-pill')
+    .forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.querySelectorAll('.syd-bill-row').forEach(row => {
+    const type   = row.dataset.type   || '';
+    const billed = row.dataset.billed || '0';
+    let show = true;
+    if (filter === 'cpt')      show = type === 'cpt';
+    if (filter === 'icd')      show = type === 'icd';
+    if (filter === 'unbilled') show = billed === '0';
+    row.style.display = show ? '' : 'none';
+  });
+}
+
+function sydViewEncounter(id) {
+  window.open(SYD.webroot
+    + '/interface/patient_file/encounter/encounter_top.php?set_encounter=' + id,
+    '_blank');
+}
+
+// ═══════════════════════════════════════════════════════
+//  CHART MODAL
+// ═══════════════════════════════════════════════════════
+let sydChartCurrentTab = 'demographics';
+
+function sydOpenChart() {
+  const modal   = document.getElementById('syd-chart-modal');
+  const overlay = document.getElementById('syd-modal-overlay');
+  if (!modal || !overlay) return;
+  modal.classList.add('open');
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  sydChartTab('demographics',
+    document.getElementById('syd-ctab-demographics'));
+}
+
+function sydCloseChart() {
+  document.getElementById('syd-chart-modal')?.classList.remove('open');
+  document.getElementById('syd-modal-overlay')?.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') sydCloseChart();
+});
+
+function sydChartTab(tabKey, el) {
+  document.querySelectorAll('.syd-cm-tab')
+    .forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  sydChartCurrentTab = tabKey;
+
+  const loading = document.getElementById('syd-cm-loading');
+  const panel   = document.getElementById('syd-cm-panel');
+  if (loading) loading.style.display = 'flex';
+  if (panel)   panel.style.display   = 'none';
+
+  fetch(SYD.webroot
+    + '/interface/modules/custom_modules'
+    + '/oe-module-physician-dashboard/public/chart_ajax.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ tab:tabKey, pid:SYD.pid, csrf:SYD.csrf })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (loading) loading.style.display = 'none';
+      if (panel) {
+        panel.style.display = 'block';
+        panel.innerHTML = data.html
+          ? '<div class="syd-fade">' + data.html + '</div>'
+          : '<p style="color:red;padding:14px;">' + (data.error || 'Error') + '</p>';
+      }
+    })
+    .catch(() => {
+      if (loading) loading.style.display = 'none';
+      if (panel) {
+        panel.style.display = 'block';
+        panel.innerHTML = '<p style="color:red;padding:14px;">Failed to load. Try again.</p>';
+      }
+    });
+}
+
+// ═══════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════
+let _toastTimer;
+function sydShowToast(msg, bg = '#1D9E75', ms = 2800) {
+  clearTimeout(_toastTimer);
+  let t = document.getElementById('_syd_toast');
+  if (!t) {
+    t    = document.createElement('div');
+    t.id = '_syd_toast';
+    t.className = 'syd-toast';
+    document.getElementById('synapta-dashboard')?.appendChild(t);
+  }
+  // Allow multi-line messages (newline → line break)
+  t.style.whiteSpace = 'pre-line';
+  t.textContent = msg;
+  t.style.background = bg;
+  t.style.opacity    = '1';
+  _toastTimer = setTimeout(() => { t.style.opacity = '0'; }, ms);
+}
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('Synapta Dashboard v1.0 | PID:', SYD?.pid, '| Enc:', SYD?.encounter);
+  // Ensure first tab is visible
+  const firstPanel = document.getElementById('syd-tab-encounter');
+  if (firstPanel) { firstPanel.style.display = 'flex'; firstPanel.classList.add('active'); }
+});
+
+// ═══════════════════════════════════════════════════════
+// ADD THESE FUNCTIONS to the END of dashboard.js
+// Fixes: sidebar nav click, body overflow lock,
+//        AI panel grid positioning
+// ═══════════════════════════════════════════════════════
+
+// ── Sidebar nav item click ────────────────────────────
+function sydNavClick(el) {
+  document.querySelectorAll('.syd-nav-item')
+    .forEach(n => n.classList.remove('active'));
+  if (el) el.classList.add('active');
+}
+
+// ── Toggle AI panel (updated for grid layout) ─────────
+function sydToggleAIPanel() {
+  sydAIPanelOpen = !sydAIPanelOpen;
+  const panel = document.getElementById('syd-ai-panel');
+  const root  = document.getElementById('synapta-dashboard');
+  const btn   = document.getElementById('syd-aip-tab');
+  if (!panel) return;
+
+  if (sydAIPanelOpen) {
+    panel.style.display = 'flex';
+    if (root) root.style.gridTemplateColumns = 'var(--syd-sw) 1fr var(--syd-aw)';
+    if (btn)  btn.style.display = 'none';
+  } else {
+    panel.style.display = 'none';
+    if (root) root.style.gridTemplateColumns = 'var(--syd-sw) 1fr 0px';
+    if (btn)  btn.style.display = 'flex';
+  }
+}
+
+// ── On DOMContentLoaded — lock body scroll ────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Lock body to prevent OpenEMR scroll fighting the dashboard
+  document.documentElement.style.height   = '100%';
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.height              = '100%';
+  document.body.style.overflow            = 'hidden';
+  document.body.style.margin              = '0';
+  document.body.style.padding             = '0';
+
+  // Ensure encounter tab is active on load
+  const enc = document.getElementById('syd-tab-encounter');
+  if (enc) {
+    enc.style.display = 'flex';
+    enc.classList.add('active');
+  }
+
+  console.log(
+    '%cSynapta Dashboard v1.0',
+    'color:#1D9E75;font-weight:700;font-size:14px;'
+  );
+  console.log('PID:', SYD?.pid, '| Encounter:', SYD?.encounter);
+});
+
+
+// ── Mobile floating buttons ───────────────────────────
+function sydInjectMobileControls() {
+  const root = document.getElementById('synapta-dashboard');
+  if (!root) return;
+
+  // Mobile overlay (backdrop for panels)
+  if (!document.getElementById('syd-mob-overlay')) {
+    const overlay = document.createElement('div');
+    overlay.id        = 'syd-mob-overlay';
+    overlay.className = 'syd-mobile-overlay';
+    overlay.onclick   = sydCloseMobilePanels;
+    root.appendChild(overlay);
+  }
+
+  // AI toggle button (tablet)
+  if (!document.getElementById('syd-mob-ai-btn')) {
+    const aiBtn = document.createElement('button');
+    aiBtn.id        = 'syd-mob-ai-btn';
+    aiBtn.className = 'syd-mobile-ai-toggle';
+    aiBtn.innerHTML = '🤖';
+    aiBtn.title     = 'Synapta AI Panel';
+    aiBtn.onclick   = sydToggleMobileAI;
+    root.appendChild(aiBtn);
+  }
+
+  // Nav toggle button (mobile)
+  if (!document.getElementById('syd-mob-nav-btn')) {
+    const navBtn = document.createElement('button');
+    navBtn.id        = 'syd-mob-nav-btn';
+    navBtn.className = 'syd-mobile-nav-toggle';
+    navBtn.innerHTML = '☰';
+    navBtn.title     = 'Navigation';
+    navBtn.onclick   = sydToggleMobileNav;
+    root.appendChild(navBtn);
+  }
+}
+
+// ── Toggle AI panel on tablet/mobile ─────────────────
+function sydToggleMobileAI() {
+  const panel   = document.getElementById('syd-ai-panel');
+  const overlay = document.getElementById('syd-mob-overlay');
+  if (!panel) return;
+
+  const isOpen = panel.classList.contains('open');
+  sydCloseMobilePanels();
+
+  if (!isOpen) {
+    panel.classList.add('open');
+    panel.style.display = 'flex';
+    if (overlay) overlay.classList.add('open');
+  }
+}
+
+// ── Toggle sidebar on mobile ──────────────────────────
+function sydToggleMobileNav() {
+  const sidebar = document.querySelector('.syd-sidebar, .sidebar');
+  const overlay = document.getElementById('syd-mob-overlay');
+  if (!sidebar) return;
+
+  const isOpen = sidebar.classList.contains('mob-open');
+  sydCloseMobilePanels();
+
+  if (!isOpen) {
+    sidebar.style.cssText = [
+      'display:flex',
+      'position:fixed',
+      'left:0','top:0','bottom:0',
+      'z-index:401',
+      'width:200px',
+      'flex-direction:column',
+      'align-items:flex-start',
+      'padding:16px 8px',
+      'background:var(--navy)',
+      'border-right:1px solid rgba(255,255,255,.08)',
+      'box-shadow:4px 0 20px rgba(0,0,0,.3)',
+    ].join(';');
+    sidebar.classList.add('mob-open');
+
+    // Widen nav items for mobile sidebar
+    sidebar.querySelectorAll('.syd-nav-item,.ni').forEach(item => {
+      item.style.width      = '100%';
+      item.style.borderRadius = '8px';
+      item.style.justifyContent = 'flex-start';
+      item.style.padding    = '10px 14px';
+      item.style.gap        = '10px';
+    });
+    // Show tooltips inline
+    sidebar.querySelectorAll('.syd-nav-tip,.ntip').forEach(tip => {
+      tip.style.position = 'static';
+      tip.style.opacity  = '1';
+      tip.style.fontSize = '13px';
+    });
+
+    if (overlay) overlay.classList.add('open');
+  }
+}
+
+// ── Close all mobile panels ───────────────────────────
+function sydCloseMobilePanels() {
+  const overlay = document.getElementById('syd-mob-overlay');
+  const panel   = document.getElementById('syd-ai-panel');
+  const sidebar = document.querySelector('.syd-sidebar, .sidebar');
+
+  if (overlay) overlay.classList.remove('open');
+
+  if (panel && panel.classList.contains('open')) {
+    panel.classList.remove('open');
+    // Restore display based on screen size
+    if (window.innerWidth >= 1024) {
+      panel.style.display = 'flex';
+    } else {
+      panel.style.display = 'none';
+    }
+  }
+
+  if (sidebar && sidebar.classList.contains('mob-open')) {
+    sidebar.classList.remove('mob-open');
+    sidebar.removeAttribute('style');
+    // Restore nav items
+    sidebar.querySelectorAll('.syd-nav-item,.ni').forEach(item => {
+      item.removeAttribute('style');
+    });
+    sidebar.querySelectorAll('.syd-nav-tip,.ntip').forEach(tip => {
+      tip.removeAttribute('style');
+    });
+    // Re-apply correct display based on screen size
+    if (window.innerWidth <= 767) {
+      sidebar.style.display = 'none';
+    }
+  }
+}
+
+// ── Handle right-col detail panel on mobile ───────────
+const _sydOpenPanelOrig = window.sydOpenPanel;
+window.sydOpenPanel = function(panelKey) {
+  _sydOpenPanelOrig && _sydOpenPanelOrig(panelKey);
+
+  // On tablet (< 1024px), show detail as slide-in panel
+  if (window.innerWidth < 1024) {
+    const rightCol = document.getElementById('syd-right-col');
+    const overlay  = document.getElementById('syd-mob-overlay');
+    if (!rightCol) return;
+
+    rightCol.style.cssText = [
+      'display:flex',
+      'position:fixed',
+      'right:0','top:0','bottom:0',
+      'width:min(340px,90vw)',
+      'z-index:395',
+      'flex-direction:column',
+      'background:var(--surface)',
+      'box-shadow:-4px 0 20px rgba(0,0,0,.15)',
+    ].join(';');
+
+    if (overlay) overlay.classList.add('open');
+
+    // Add close handler
+    overlay.onclick = () => {
+      rightCol.removeAttribute('style');
+      sydCloseMobilePanels();
+      sydClosePanel && sydClosePanel();
+    };
+  }
+};
+
+// ── Handle resize — show/hide panels correctly ────────
+let _sydResizeTimer;
+function sydHandleResize() {
+  clearTimeout(_sydResizeTimer);
+  _sydResizeTimer = setTimeout(() => {
+    const w       = window.innerWidth;
+    const root    = document.getElementById('synapta-dashboard');
+    const panel   = document.getElementById('syd-ai-panel');
+    const sidebar = document.querySelector('.syd-sidebar, .sidebar');
+
+    // Close all mobile panels first
+    sydCloseMobilePanels();
+
+    if (w >= 1024) {
+      // Desktop + tablet landscape — show AI panel, show sidebar
+      if (panel)   { panel.style.display   = 'flex'; }
+      if (sidebar) { sidebar.style.display = 'flex'; }
+      if (root)    {
+        root.style.gridTemplateColumns = w >= 1280
+          ? 'var(--sw) 1fr var(--aw)'
+          : 'var(--sw) 1fr 260px';
+        root.style.gridTemplateAreas = '"T T T" "S M A"';
+      }
+    } else if (w >= 768) {
+      // Tablet portrait — hide AI, show sidebar
+      if (panel)   { panel.style.display   = 'none'; }
+      if (sidebar) { sidebar.style.display = 'flex'; }
+      if (root)    {
+        root.style.gridTemplateColumns = 'var(--sw) 1fr';
+        root.style.gridTemplateAreas  = '"T T" "S M"';
+      }
+    } else {
+      // Mobile — hide both
+      if (panel)   { panel.style.display   = 'none'; }
+      if (sidebar) { sidebar.style.display = 'none'; }
+      if (root)    {
+        root.style.gridTemplateColumns = '0 1fr';
+        root.style.gridTemplateAreas  = '"T T" "M M"';
+      }
+    }
+  }, 120);
+}
+
+// ── Update sydToggleAIPanel for responsive context ─────
+window.sydToggleAIPanel = function() {
+  if (window.innerWidth < 1024) {
+    sydToggleMobileAI();
+    return;
+  }
+  // Desktop toggle
+  sydAIPanelOpen = !sydAIPanelOpen;
+  const panel = document.getElementById('syd-ai-panel');
+  const root  = document.getElementById('synapta-dashboard');
+  if (!panel) return;
+  if (sydAIPanelOpen) {
+    panel.style.display = 'flex';
+    if (root) root.style.gridTemplateColumns = 'var(--sw) 1fr var(--aw)';
+  } else {
+    panel.style.display = 'none';
+    if (root) root.style.gridTemplateColumns = 'var(--sw) 1fr 0px';
+  }
+};
+
+// ── Cards horizontal scroll touch ─────────────────────
+function sydInitCardScroll() {
+  const row = document.querySelector('.syd-cards-row, .cc-row');
+  if (!row) return;
+
+  let startX, startScrollLeft, isDragging = false;
+
+  row.addEventListener('mousedown', e => {
+    isDragging    = true;
+    startX        = e.pageX - row.offsetLeft;
+    startScrollLeft = row.scrollLeft;
+    row.style.cursor = 'grabbing';
+  });
+  row.addEventListener('mouseleave', () => { isDragging = false; row.style.cursor = ''; });
+  row.addEventListener('mouseup',    () => { isDragging = false; row.style.cursor = ''; });
+  row.addEventListener('mousemove',  e => {
+    if (!isDragging) return;
+    e.preventDefault();
+    row.scrollLeft = startScrollLeft - (e.pageX - row.offsetLeft - startX);
+  });
+}
+
+// ── Tab strip touch scroll ─────────────────────────────
+function sydInitTabScroll() {
+  const strip = document.querySelector('.syd-tabs-row, .stabs');
+  if (!strip) return;
+  let startX, startSL, active = false;
+  strip.addEventListener('touchstart',  e => { active=true; startX=e.touches[0].clientX; startSL=strip.scrollLeft; }, {passive:true});
+  strip.addEventListener('touchmove',   e => { if(!active)return; strip.scrollLeft=startSL-(e.touches[0].clientX-startX); }, {passive:true});
+  strip.addEventListener('touchend',    () => { active=false; });
+}
+
+// ── Keyboard shortcuts ─────────────────────────────────
+document.addEventListener('keydown', e => {
+  // Escape — close chart modal or mobile panels
+  if (e.key === 'Escape') {
+    sydCloseChart && sydCloseChart();
+    sydCloseMobilePanels();
+  }
+  // Ctrl+S — save note
+  if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    sydSaveNote && sydSaveNote();
+  }
+  // Ctrl+E — expand all SOAP sections
+  if (e.key === 'e' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    sydExpandAll && sydExpandAll();
+  }
+});
+
+// ── Init on DOM ready ──────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Lock body scroll
+  document.documentElement.style.cssText = 'height:100%;overflow:hidden;margin:0;padding:0;';
+  document.body.style.cssText            = 'height:100%;overflow:hidden;margin:0;padding:0;';
+
+  // Inject mobile controls
+  sydInjectMobileControls();
+
+  // Init card + tab scroll
+  sydInitCardScroll();
+  sydInitTabScroll();
+
+  // Listen for resize
+  window.addEventListener('resize', sydHandleResize, { passive: true });
+
+  // Set initial state based on screen width
+  sydHandleResize();
+
+  // Ensure first tab visible
+  const enc = document.getElementById('syd-tab-encounter');
+  if (enc) {
+    enc.style.display = 'flex';
+    enc.classList.add('active');
+  }
+
+  console.log(
+    '%cSynapta Dashboard v3.0',
+    'color:#1D9E75;font-weight:700;font-size:14px;background:#0F1117;padding:4px 10px;border-radius:5px;'
+  );
+  if (typeof SYD !== 'undefined') {
+    console.log('PID:', SYD.pid, '| Encounter:', SYD.encounter);
+  }
+});
+
+function sydShowOrderTab(tab, btn){
+
+  document.querySelectorAll('.syd-orders-tab')
+    .forEach(t => t.classList.remove('active'));
+
+  btn.classList.add('active');
+
+  document.querySelectorAll('.syd-orders-panel')
+    .forEach(p => p.style.display = 'none');
+
+  const panel = document.getElementById(
+    'syd-orders-panel-' + tab
+  );
+
+  if(panel){
+    panel.style.display = 'block';
+  }
+}
+
+
+(function () {
+    var TOTAL  = 7;   /* total number of cards */
+    var VISIBLE = 5;  /* cards shown at once   */
+    var STEPS  = TOTAL - VISIBLE;  /* = 2  */
+    var step   = 0;
+
+    function getCardWidth() {
+        var vp    = document.getElementById('syd-viewport');
+        var row   = document.getElementById('syd-cards-row');
+        if (!vp || !row) return 0;
+        /* card width = (viewport width - gaps) / VISIBLE */
+        /* gaps = (VISIBLE - 1) * 8px = 32px              */
+        var gapPx = 8;
+        return (vp.offsetWidth - gapPx * (VISIBLE - 1)) / VISIBLE;
+    }
+
+    function applySlide() {
+        var row  = document.getElementById('syd-cards-row');
+        var prev = document.getElementById('syd-prev');
+        var next = document.getElementById('syd-next');
+        if (!row) return;
+
+        var cardW  = getCardWidth();
+        var gapPx  = 8;
+        var offset = step * (cardW + gapPx);
+
+        row.style.transform = 'translateX(-' + offset + 'px)';
+
+        prev.disabled = (step === 0);
+        next.disabled = (step >= STEPS);
+
+        /* dots */
+        var dots = document.querySelectorAll('.syd-slider-dot');
+        dots.forEach(function (d, i) {
+            d.classList.toggle('active', i === step);
+        });
+    }
+
+    window.sydSlide = function (dir) {
+        /* jump 2 cards per click; clamp so we never overshoot */
+        step = Math.min(Math.max(step + dir * 2, 0), STEPS);
+        applySlide();
+    };
+
+    /* Recalculate on resize (handles flex reflow) */
+    window.addEventListener('resize', function () { applySlide(); });
+
+    /* Initial state */
+    applySlide();
+})();
+
+
+function sydChangeEncounter(value)
+{
+    // Create new encounter
+    if (value === '__new__') {
+
+        window.location.href =
+            "<?php echo $GLOBALS['webroot']; ?>/interface/patient_file/encounter/encounter_top.php?pid=<?php echo $pid; ?>";
+
+        return;
+    }
+
+    // Reload dashboard with selected encounter
+    const url = new URL(window.location.href);
+
+    url.searchParams.set('set_pid', '<?php echo (int)$pid; ?>');
+    url.searchParams.set('set_encounter', value);
+
+    window.location.href = url.toString();
+}
