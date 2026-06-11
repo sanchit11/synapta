@@ -879,6 +879,7 @@ try {
                 'processing_ms'     => $processingMs,
                 'model_version'     => $aiResult['model_version'],
                 'drug_interaction'  => $aiResult['drug_interaction'] ?? null,
+                'clinical_summary'  => $aiResult['clinical_summary'] ?? null,
             ]);
             break;
 

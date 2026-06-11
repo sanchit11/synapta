@@ -1,0 +1,14 @@
+{
+  "name": "openemr/oe-module-patient-dashboard",
+  "description": "Patient Dashboard for OpenEMR 8.0",
+  "type": "library",
+  "license": "AGPL-3.0",
+  "require": {
+    "php": ">=8.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "OpenEMR\\Modules\\PatientDashboard\\": "src/"
+    }
+  }
+}

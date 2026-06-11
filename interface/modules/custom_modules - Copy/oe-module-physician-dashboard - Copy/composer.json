@@ -1,0 +1,7 @@
+{
+  "name": "synapta/oe-module-physician-dashboard",
+  "description": "Synapta Provider Dashboard for OpenEMR 8.0",
+  "type": "openemr-module",
+  "version": "1.0.0",
+  "require": {}
+}

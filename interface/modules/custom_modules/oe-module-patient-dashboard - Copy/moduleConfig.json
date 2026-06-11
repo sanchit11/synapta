@@ -1,0 +1,18 @@
+{
+  "id": "oe-module-patient-dashboard",
+  "name": "Patient Dashboard",
+  "short_name": "patient_dashboard",
+  "description": "Replaces the default OpenEMR Patient Portal home dashboard with a modern, tabbed UI. Includes appointments, messages, records, medications, billing and a care highlights panel.",
+  "version": "1.0.0",
+  "min_openemr_version": "8.0.0",
+  "requires_installed": true,
+  "authors": [
+    {
+      "name": "Your Organisation",
+      "email": "dev@yourorg.com"
+    }
+  ],
+  "license": "AGPL-3.0",
+  "category": "Patient Portal",
+  "type": "custom"
+}
