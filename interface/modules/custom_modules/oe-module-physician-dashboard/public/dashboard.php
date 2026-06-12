@@ -3322,7 +3322,7 @@ function formatValues($value, $decimals = 1)
                 </div>
 
                 <!-- ── SECTION 2: Chief Complaints ── -->
-                    <div class="syd-aip-section syd-cc-section " style="margin-top: 10px; background-color: var(--blue-l); border: 1px solid rgba(66, 133, 244, .2);">                    <div class="syd-aip-section-title">
+                    <div class="syd-aip-section syd-cc-section cds fade" style="margin-top: 5px; padding:5px; background-color: var(--red-l); border: 1px solid rgba(66, 133, 244, .2);">                    <div class="syd-aip-section-title">
                         <span>🗣 Last Complaints</span>
                         <span class="syd-aip-count"><?php echo count($chiefComplaints); ?> recent</span>
                     </div>
@@ -3376,7 +3376,7 @@ function formatValues($value, $decimals = 1)
                 </div>
 
                 <!-- ── SECTION 3: Negative Lab Results ── -->
-                <div class="syd-aip-section syd-lab-section fade">
+                <div class="syd-aip-section syd-lab-section cds fade" style="margin-top: 5px; padding:5px; background-color: var(--red-l); border: 1px solid rgba(255, 99, 132, .2);">
                     <div class="syd-aip-section-title">
                         <span>🧪 Negative Lab Results</span>
                         <span class="syd-aip-count"><?php echo count($negativeLabResults); ?> flagged</span>

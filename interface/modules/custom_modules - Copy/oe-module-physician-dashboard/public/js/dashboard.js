@@ -4,6 +4,88 @@
 // ═══════════════════════════════════════════════════════
 
 // ── Global state ──────────────────────────────────────
+  // Inject Hourglass Styles dynamically into the document head
+(function injectHourglassStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    .syd-loading-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px 10px;
+      width: 100%;
+    }
+    .syd-loading-container.minor {
+      flex-direction: row;
+      justify-content: flex-start;
+      padding: 8px 0;
+      gap: 8px;
+    }
+    .syd-loading-text {
+      font-size: 13px;
+      color: #888780;
+      font-weight: 500;
+      margin-top: 12px;
+    }
+    .syd-loading-container.minor .syd-loading-text {
+      margin-top: 0;
+      font-size: 12px;
+    }
+    .syd-hourglass-spinner {
+      width: 32px;
+      height: 32px;
+      fill: none;
+      stroke: #0F6E56;
+      stroke-width: 1.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      animation: hourglassFlip 3s cubic-bezier(0.77, 0, 0.175, 1) infinite;
+    }
+    .syd-loading-container.minor .syd-hourglass-spinner {
+      width: 16px;
+      height: 16px;
+      stroke-width: 2;
+    }
+    .hourglass-glass { fill: rgba(15, 110, 86, 0.05); }
+    .hourglass-frame { fill: #0F6E56; }
+    .hourglass-sand-top {
+      fill: #C77A0A;
+      stroke: none;
+      transform-origin: 12px 12px;
+      animation: sandDisappear 3s ease-in-out infinite;
+    }
+    .hourglass-sand-bottom {
+      fill: #C77A0A;
+      stroke: none;
+      transform-origin: 12px 12px;
+      animation: sandAccumulate 3s ease-in-out infinite;
+    }
+    .hourglass-stream {
+      stroke: #C77A0A;
+      stroke-width: 1;
+      stroke-dasharray: 2 4;
+      animation: sandStream 0.5s linear infinite;
+    }
+    @keyframes hourglassFlip {
+      0%, 85% { transform: rotate(0deg); }
+      95%, 100% { transform: rotate(180deg); }
+    }
+    @keyframes sandDisappear {
+      0% { transform: scaleY(1); opacity: 1; }
+      75%, 100% { transform: scaleY(0); opacity: 0; }
+    }
+    @keyframes sandAccumulate {
+      0%, 15% { transform: scaleY(0.1); }
+      80%, 100% { transform: scaleY(1); }
+    }
+    @keyframes sandStream {
+      0% { stroke-dashoffset: 0; }
+      100% { stroke-dashoffset: -6; }
+    }
+  `;
+  document.head.appendChild(style);
+})();
 let sydScribeActive  = false;
 let sydCurrentPanel  = null;
 let sydAIPanelOpen   = true;
@@ -269,6 +351,7 @@ history.forEach((h, i) => {
 }
 
 // ── Panel data config ─────────────────────────────────
+// ── Panel data config ─────────────────────────────────
 const SYD_PANELS = {
 
   vitals: {
@@ -276,8 +359,15 @@ const SYD_PANELS = {
 
   render: () => `
     <div id="syd-vitals-panel">
-      <div class="syd-loading">
-        Loading vitals...
+      <div class="syd-loading-container">
+        <svg class="syd-hourglass-spinner" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path class="hourglass-frame" d="M5 2h14v2H5V2zm0 18h14v2H5v-2z" />
+          <path class="hourglass-glass" d="M6 4v1.5c0 3 2.5 5.5 5.5 6.5C8.5 13 6 15.5 6 18.5V20h12v-1.5c0-3-2.5-5.5-5.5-6.5 3-1 5.5-3.5 5.5-6.5V4H6zm10 2v.5c0 1.9-1.6 3.5-3.5 4.5V11h-1v-2c-1.9-1-3.5-2.6-3.5-4.5V6h8z" />
+          <path class="hourglass-sand-top" d="M8 7h8c0 1.5-1.5 3-4 3S8 8.5 8 7z" />
+          <path class="hourglass-sand-bottom" d="M12 14c2.5 0 4 1.5 4 3h-8c0-1.5 1.5-3 4-3z" />
+          <line class="hourglass-stream" x1="12" y1="10" x2="12" y2="17" />
+        </svg>
+        <div class="syd-loading-text">Loading Vital Trends...</div>
       </div>
     </div>
   `
@@ -328,7 +418,12 @@ const SYD_PANELS = {
     title: '📋 Problem List',
     render: () => `
       <div id="syd-dp-problems-body">
-        <p style="color:#888;font-size:12px;padding:8px 0;">Loading…</p>
+        <div class="syd-loading-container minor">
+          <svg class="syd-hourglass-spinner" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path class="hourglass-glass" d="M6 4v1.5c0 3 2.5 5.5 5.5 6.5C8.5 13 6 15.5 6 18.5V20h12v-1.5c0-3-2.5-5.5-5.5-6.5 3-1 5.5-3.5 5.5-6.5V4H6z"/>
+          </svg>
+          <span class="syd-loading-text">Loading Problems...</span>
+        </div>
       </div>`
   },
 
@@ -336,7 +431,12 @@ const SYD_PANELS = {
     title: '💊 Active Medications',
     render: () => `
       <div id="syd-dp-meds-body">
-        <p style="color:#888;font-size:12px;padding:8px 0;">Loading…</p>
+        <div class="syd-loading-container minor">
+          <svg class="syd-hourglass-spinner" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path class="hourglass-glass" d="M6 4v1.5c0 3 2.5 5.5 5.5 6.5C8.5 13 6 15.5 6 18.5V20h12v-1.5c0-3-2.5-5.5-5.5-6.5 3-1 5.5-3.5 5.5-6.5V4H6z"/>
+          </svg>
+          <span class="syd-loading-text">Loading Medications...</span>
+        </div>
       </div>`
   },
 
@@ -344,7 +444,12 @@ const SYD_PANELS = {
     title: '🧪 Labs & Studies',
     render: () => `
       <div id="syd-dp-labs-body">
-        <p style="color:#888;font-size:12px;padding:8px 0;">Loading…</p>
+        <div class="syd-loading-container minor">
+          <svg class="syd-hourglass-spinner" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path class="hourglass-glass" d="M6 4v1.5c0 3 2.5 5.5 5.5 6.5C8.5 13 6 15.5 6 18.5V20h12v-1.5c0-3-2.5-5.5-5.5-6.5 3-1 5.5-3.5 5.5-6.5V4H6z"/>
+          </svg>
+          <span class="syd-loading-text">Loading Labs...</span>
+        </div>
       </div>`
   },
 
@@ -352,14 +457,24 @@ const SYD_PANELS = {
     title: '⚠️ Allergies & Adverse Reactions',
     render: () => `
       <div id="syd-dp-allergies-body">
-        <p style="color:#888;font-size:12px;padding:8px 0;">Loading…</p>
+        <div class="syd-loading-container minor">
+          <svg class="syd-hourglass-spinner" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path class="hourglass-glass" d="M6 4v1.5c0 3 2.5 5.5 5.5 6.5C8.5 13 6 15.5 6 18.5V20h12v-1.5c0-3-2.5-5.5-5.5-6.5 3-1 5.5-3.5 5.5-6.5V4H6z"/>
+          </svg>
+          <span class="syd-loading-text">Loading Allergies...</span>
+        </div>
       </div>`
   },
   surgical_history: {
     title: '🔪 Surgical History',
     render: () => `
       <div id="syd-dp-surgical-history-body">
-        <p style="color:#888;font-size:12px;padding:8px 0;">Loading…</p>
+        <div class="syd-loading-container minor">
+          <svg class="syd-hourglass-spinner" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path class="hourglass-glass" d="M6 4v1.5c0 3 2.5 5.5 5.5 6.5C8.5 13 6 15.5 6 18.5V20h12v-1.5c0-3-2.5-5.5-5.5-6.5 3-1 5.5-3.5 5.5-6.5V4H6z"/>
+          </svg>
+          <span class="syd-loading-text">Loading History...</span>
+        </div>
       </div>`
   }
 };
@@ -1379,7 +1494,86 @@ function sydUpdatePVI(cs) {
     return 'syd-pvi-flag-warn';
   };
 
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const numVal = v => {
+    if (v === null || v === undefined || v === '' || v === 'None') return null;
+    const n = parseFloat(v); return isNaN(n) ? null : n;
+  };
+  const cmpTr = (p, n) => {
+    const pv = numVal(p), nv = numVal(n);
+    if (pv === null || nv === null) return null;
+    return nv > pv ? 'up' : nv < pv ? 'down' : 'same';
+  };
+  const delta = (p, n) => {
+    const pv = numVal(p), nv = numVal(n);
+    if (pv === null || nv === null) return null;
+    const d = Math.round((nv - pv) * 10) / 10;
+    return (d > 0 ? '+' : '') + d;
+  };
+  const trendArrow = t => t === 'up' ? '▲' : t === 'down' ? '▼' : t === 'same' ? '→' : '';
+  const chipHtml = (d, t) => d !== null
+    ? `<span class="syd-pvi-vt-chip syd-pvi-vt-chip-${t||''}">${esc(String(d))}</span>` : '';
+  const arrowHtml = t => t ? `<span class="syd-pvi-vt-arrow syd-pvi-vt-${t}">${trendArrow(t)}</span>` : '';
+
   let html = '';
+
+  // ── 0. Vitals Trend — AI card (preferred) or static DB fallback ──────────
+  const vtAI = (typeof SYD !== 'undefined' && SYD.vitalTrendsAI) ? SYD.vitalTrendsAI : null;
+  const dbV  = (typeof SYD !== 'undefined' && SYD.dbVitals)       ? SYD.dbVitals      : null;
+
+  if (vtAI && vtAI.clinical_analysis) {
+    // ── AI-powered card (delegate to shared builder) ───────────────────────
+    html += sydBuildVtaiCardHtml(vtAI);
+
+  } else if (dbV && dbV.latest) {
+    // ── Static DB comparison fallback ─────────────────────────────────────
+    const lat  = dbV.latest;
+    const prev = dbV.previous;
+
+    const fmtDate = d => {
+      if (!d) return '';
+      const dt = new Date(d.replace(' ', 'T'));
+      return isNaN(dt) ? String(d).slice(0,10)
+        : dt.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+    };
+
+    const latDate  = fmtDate(lat.date);
+    const prevDate = prev ? fmtDate(prev.date) : null;
+    const subtitle = prevDate ? `${prevDate} → ${latDate}` : `Latest: ${latDate}`;
+
+    const bpLat  = (lat.bps  && lat.bpd)  ? `${lat.bps}/${lat.bpd} mmHg` : '—';
+    const bpPrev = prev && prev.bps && prev.bpd ? `${prev.bps}/${prev.bpd} mmHg` : (prev ? '—' : null);
+    const bpTr   = prev ? cmpTr(prev.bps, lat.bps) : null;
+    const bpDel  = prev ? delta(prev.bps, lat.bps) : null;
+    const bpAlert  = (numVal(lat.bps) ?? 0) >= 130;
+    const o2Alert  = (numVal(lat.oxygen_saturation) ?? 100) < 95;
+    const bmiAlert = (numVal(lat.BMI) ?? 0) >= 30;
+    const hasAlert = bpAlert || o2Alert || bmiAlert;
+
+    const vitRows = [
+      { label:'Blood Pressure', prevVal: bpPrev !== null ? bpPrev : '—', latVal: bpLat, tr: bpTr, del: bpDel, alert: bpAlert, showPrev: prev !== null },
+      { label:'Pulse',          prevVal: prev ? `${prev.pulse ?? '—'} bpm` : null,  latVal: `${lat.pulse ?? '—'} bpm`,  tr: prev ? cmpTr(prev.pulse, lat.pulse) : null, del: prev ? delta(prev.pulse, lat.pulse) : null, alert: false, showPrev: !!prev },
+      { label:'Respiration',    prevVal: prev ? `${prev.respiration ?? '—'} br/min` : null, latVal: `${lat.respiration ?? '—'} br/min`, tr: prev ? cmpTr(prev.respiration, lat.respiration) : null, del: prev ? delta(prev.respiration, lat.respiration) : null, alert: false, showPrev: !!prev },
+      { label:'Temperature',    prevVal: prev ? `${prev.temperature ?? '—'} °F` : null, latVal: `${lat.temperature ?? '—'} °F`, tr: prev ? cmpTr(prev.temperature, lat.temperature) : null, del: prev ? delta(prev.temperature, lat.temperature) : null, alert: (numVal(lat.temperature) ?? 0) > 100.4, showPrev: !!prev },
+      { label:'O₂ Saturation',  prevVal: prev ? `${prev.oxygen_saturation ?? '—'} %` : null, latVal: `${lat.oxygen_saturation ?? '—'} %`, tr: prev ? cmpTr(prev.oxygen_saturation, lat.oxygen_saturation) : null, del: prev ? delta(prev.oxygen_saturation, lat.oxygen_saturation) : null, alert: o2Alert, showPrev: !!prev },
+      { label:'Weight',         prevVal: prev ? `${prev.weight ?? '—'} lbs` : null, latVal: `${lat.weight ?? '—'} lbs`, tr: prev ? cmpTr(prev.weight, lat.weight) : null, del: prev ? delta(prev.weight, lat.weight) : null, alert: false, showPrev: !!prev },
+      { label:'BMI',            prevVal: prev ? esc(String(prev.BMI ?? '—')) : null, latVal: esc(String(lat.BMI ?? '—')), tr: prev ? cmpTr(prev.BMI, lat.BMI) : null, del: prev ? delta(prev.BMI, lat.BMI) : null, alert: bmiAlert, showPrev: !!prev },
+    ];
+
+    html += `<div class="syd-pvi-vt-card${hasAlert ? ' syd-pvi-vt-card-alert' : ''}">`;
+    html += `<div class="syd-pvi-vt-title">📈 Vitals Trend — DB Comparison<span class="syd-pvi-vt-sub">${esc(subtitle)}</span></div>`;
+    html += `<div class="syd-pvi-vt-table">`;
+    html += `<div class="syd-pvi-vt-row syd-pvi-vt-hdr"><span>Vital</span><span>${prev ? 'Previous' : '—'}</span><span>Latest</span><span>Δ</span></div>`;
+    vitRows.forEach(r => {
+      html += `<div class="syd-pvi-vt-row${r.alert ? ' syd-pvi-vt-alert' : ''}">`;
+      html += `<span>${esc(r.label)}</span>`;
+      html += `<span class="syd-pvi-vt-prev">${r.showPrev ? esc(r.prevVal || '—') : '—'}</span>`;
+      html += `<span class="syd-pvi-vt-lat${r.alert ? ' syd-pvi-vt-warn' : ''}">${esc(r.latVal)}</span>`;
+      html += `<span class="syd-pvi-vt-delta">${chipHtml(r.del, r.tr)}${arrowHtml(r.tr)}</span>`;
+      html += `</div>`;
+    });
+    html += `</div></div>`;
+  }
 
   // ── 1. Current Vitals ────────────────────────────────────────────────────
   const v = cs.current_vitals;
@@ -1516,6 +1710,27 @@ function sydUpdatePVI(cs) {
       .syd-pvi-active   { background: #cce5ff; color: #004085; }
       .syd-pvi-resolved { background: #e2e3e5; color: #383d41; }
       .syd-pvi-neg      { background: #d4edda; color: #155724; }
+      .syd-pvi-vt-card { background:#fff; border:1px solid #b8d4f5; border-radius:7px; overflow:hidden; margin-bottom:10px; font-size:12px; }
+      .syd-pvi-vt-card.syd-pvi-vt-card-alert { border-color:#f5c6cb; }
+      .syd-pvi-vt-title { background:linear-gradient(135deg,#e8f4fd,#dceeff); padding:7px 11px; font-weight:700; font-size:12px; color:#1a5fa8; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; }
+      .syd-pvi-vt-sub { font-weight:400; font-size:10px; color:#4a7fb5; }
+      .syd-pvi-vt-table { width:100%; }
+      .syd-pvi-vt-row { display:grid; grid-template-columns:1.1fr 1fr 1fr 56px; align-items:center; padding:4px 10px; border-bottom:1px solid #f1f3f5; font-size:11.5px; gap:4px; }
+      .syd-pvi-vt-row:last-child { border-bottom:none; }
+      .syd-pvi-vt-hdr { background:#f8f9fa; font-weight:700; font-size:10px; color:#6c757d; text-transform:uppercase; letter-spacing:.4px; }
+      .syd-pvi-vt-alert { background:#fff5f5; }
+      .syd-pvi-vt-prev { color:#6c757d; }
+      .syd-pvi-vt-lat { font-weight:600; color:#212529; }
+      .syd-pvi-vt-warn { color:#a32d2d; font-weight:700; }
+      .syd-pvi-vt-delta { display:flex; align-items:center; gap:3px; }
+      .syd-pvi-vt-chip { font-size:10px; font-weight:700; padding:1px 5px; border-radius:4px; background:#e9ecef; color:#495057; white-space:nowrap; }
+      .syd-pvi-vt-chip-up   { background:#f8d7da; color:#721c24; }
+      .syd-pvi-vt-chip-down { background:#d4edda; color:#155724; }
+      .syd-pvi-vt-chip-same { background:#e9ecef; color:#6c757d; }
+      .syd-pvi-vt-arrow { font-size:11px; font-weight:700; }
+      .syd-pvi-vt-up   { color:#a32d2d; }
+      .syd-pvi-vt-down { color:#1a6f3b; }
+      .syd-pvi-vt-same { color:#6c757d; }
     `;
     document.head.appendChild(st);
   }
@@ -1754,7 +1969,256 @@ document.addEventListener('DOMContentLoaded', () => {
   // Ensure first tab is visible
   const firstPanel = document.getElementById('syd-tab-encounter');
   if (firstPanel) { firstPanel.style.display = 'flex'; firstPanel.classList.add('active'); }
+  // Load AI vitals analysis asynchronously (non-blocking)
+  sydLoadVitalTrendsAI();
 });
+
+// ── AI Vitals Trend Analysis — async loader ───────────────────────────────
+function sydLoadVitalTrendsAI() {
+  const container  = document.getElementById('syd-vtai-container');
+  const pviContent = document.getElementById('syd-pvi-content');
+  if (!container || typeof SYD === 'undefined' || !SYD.pid) return;
+
+  // Clear everything — show ONLY the loading notice until the API responds
+  container.innerHTML = '';
+  if (pviContent) {
+    // Remove any leftover static content so nothing shows except the loader
+    pviContent.querySelectorAll(':scope > *:not(#syd-vtai-container)').forEach(el => el.remove());
+  }
+
+  // Insert loading notice at the top of pviContent (above the container)
+  const notice = document.createElement('div');
+  notice.id = 'syd-vtai-loading-notice';
+  notice.className = 'syd-vtai-loading-notice';
+  notice.innerHTML = `
+    <div class="syd-vtai-ln-spinner"></div>
+    <div class="syd-vtai-ln-text">
+      <div class="syd-vtai-ln-title">Loading Vital Trends</div>
+      <div class="syd-vtai-ln-sub">Please wait for a few minutes — Fetching Vitals Trend</div>
+    </div>`;
+  if (pviContent) {
+    pviContent.insertBefore(notice, pviContent.firstChild);
+  } else {
+    container.appendChild(notice);
+  }
+
+  const fd = new FormData();
+  fd.append('action',    'vital_trends');
+  fd.append('pid',       SYD.pid);
+  fd.append('encounter', SYD.encounter || 0);
+  fd.append('csrf',      SYD.csrf);
+
+  const ajaxUrl = (SYD.webroot || '') +
+    '/interface/modules/custom_modules/oe-module-physician-dashboard/public/ajax.php';
+
+  fetch(ajaxUrl, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(resp => {
+      document.getElementById('syd-vtai-loading-notice')?.remove();
+      if (resp.success && resp.data) {
+        SYD.vitalTrendsAI = resp.data;
+        container.innerHTML = sydBuildVtaiCardHtml(resp.data);
+      }
+    })
+    .catch(() => {
+      document.getElementById('syd-vtai-loading-notice')?.remove();
+    });
+}
+
+// ── Build AI Vitals Trend Card HTML (used by loader + sydUpdatePVI) ────────
+function sydBuildVtaiCardHtml(data) {
+  const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const num = v => (v === null || v === undefined || v === '') ? null : Number(v);
+  const fmt = v => {
+    if (v === null || v === undefined || v === '') return '—';
+    const n = Number(v);
+    return isNaN(n) ? String(v) : (Number.isInteger(n) ? String(n) : parseFloat(n.toFixed(2)).toString());
+  };
+
+  const ca  = data.clinical_analysis || {};
+  const rec = data.recommendations   || ca.recommendations || {};
+
+  // Status — handle compound strings like "Monitoring Required - Concerning Trend"
+  const rawStatus = ca.status || data.status || 'Stable';
+  const caStatus  = rawStatus.split(' - ')[0].trim();  // take first part
+  const urgency   = rec.urgency || 'Routine';
+
+  // Per-vital colour palette
+  const vitalColors = {
+    'Blood Pressure':   { color: '#c0392b', bg: '#fff5f5' },
+    'Pulse':            { color: '#e67e22', bg: '#fff8f0' },
+    'Heart Rate':       { color: '#e67e22', bg: '#fff8f0' },
+    'Temperature':      { color: '#8e44ad', bg: '#faf5ff' },
+    'Respiration Rate': { color: '#2980b9', bg: '#f0f7ff' },
+    'Respiration':      { color: '#2980b9', bg: '#f0f7ff' },
+    'Oxygen Saturation':{ color: '#16a085', bg: '#f0faf8' },
+    'SpO2':             { color: '#16a085', bg: '#f0faf8' },
+    'Weight':           { color: '#27ae60', bg: '#f2fbf4' },
+    'BMI':              { color: '#1a6a8a', bg: '#edf6fb' },
+    'Height':           { color: '#5d6d7e', bg: '#f5f6fa' },
+  };
+  const fallbackColors = ['#7d3c98','#1a5276','#117a65','#784212','#1f618d','#922b21'];
+  let colorIdx = 0;
+  const getVitalColor = name => {
+    const k = Object.keys(vitalColors).find(k => name.toLowerCase().includes(k.toLowerCase()));
+    if (k) return vitalColors[k];
+    const c = fallbackColors[colorIdx % fallbackColors.length]; colorIdx++;
+    return { color: c, bg: '#f8f9fa' };
+  };
+
+  const statusMap = {
+    'Normal':              { cls: 'syd-vtai-ok',       icon: '✓', label: 'Normal' },
+    'Stable':              { cls: 'syd-vtai-stable',   icon: '●', label: 'Stable' },
+    'Monitoring Required': { cls: 'syd-vtai-warn',     icon: '⚠', label: 'Monitor' },
+    'Concerning Trend':    { cls: 'syd-vtai-concern',  icon: '↑', label: 'Concerning' },
+    'Critical':            { cls: 'syd-vtai-critical', icon: '!', label: 'Critical' },
+  };
+  const sMeta = statusMap[caStatus] || { cls: 'syd-vtai-warn', icon: '⚠', label: caStatus };
+
+  const urgMap = {
+    'Routine':                     { cls: 'syd-vtai-urg-r', dot: '#27ae60' },
+    'Within 1 Week':               { cls: 'syd-vtai-urg-w', dot: '#2980b9' },
+    'Monitoring Required':         { cls: 'syd-vtai-urg-w', dot: '#2980b9' },
+    'Prompt (Within 24-48 Hours)': { cls: 'syd-vtai-urg-p', dot: '#e67e22' },
+    'Urgent (Same Day)':           { cls: 'syd-vtai-urg-u', dot: '#c0392b' },
+    'Emergency':                   { cls: 'syd-vtai-urg-e', dot: '#7b241c' },
+  };
+  const uMeta = urgMap[urgency] || { cls: 'syd-vtai-urg-p', dot: '#e67e22' };
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  let h = `<div class="syd-vtai-card">
+  <div class="syd-vtai-header">
+    <div class="syd-vtai-header-left">
+      <span class="syd-vtai-header-icon">🩺</span>
+      <span class="syd-vtai-title">AI Vitals Analysis</span>
+    </div>
+    <span class="syd-vtai-badge ${sMeta.cls}">${sMeta.icon} ${esc(sMeta.label)}</span>
+  </div>`;
+
+  // ── Clinical Interpretation callout ──────────────────────────────────────
+  if (ca.overall_interpretation) {
+    h += `<div class="syd-vtai-interp">
+      <div class="syd-vtai-interp-bar"></div>
+      <div class="syd-vtai-interp-body">
+        <div class="syd-vtai-interp-label">Clinical Interpretation</div>
+        <div class="syd-vtai-interp-text">${esc(ca.overall_interpretation)}</div>
+      </div>
+    </div>`;
+  }
+
+  // ── Vitals Table ─────────────────────────────────────────────────────────
+  if (ca.vitals_trends && ca.vitals_trends.length) {
+    h += `<div class="syd-vtai-tbl-wrap">
+      <div class="syd-vtai-section-label">Vitals Trend</div>
+      <table class="syd-vtai-tbl">
+        <thead>
+          <tr>
+            <th class="syd-vtai-th syd-vtai-th-vital">Vital Sign</th>
+            <th class="syd-vtai-th">Previous</th>
+            <th class="syd-vtai-th">Latest</th>
+            <th class="syd-vtai-th">Change</th>
+            <th class="syd-vtai-th syd-vtai-th-pct">%</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+    ca.vitals_trends.forEach(vtr => {
+      const prev = vtr.previous_value ?? vtr.previous;
+      const lat  = vtr.latest_value   ?? vtr.latest;
+      const vc   = getVitalColor(vtr.vital_sign || '');
+
+      // Delta
+      let deltaNum = null;
+      if (vtr.delta_systolic !== undefined && vtr.delta_systolic !== null) {
+        deltaNum = Number(vtr.delta_systolic);
+      } else if (vtr.delta !== undefined && vtr.delta !== null && !isNaN(Number(vtr.delta))) {
+        deltaNum = Number(vtr.delta);
+      } else if (vtr.delta_value !== undefined && vtr.delta_value !== null && !isNaN(Number(vtr.delta_value))) {
+        deltaNum = Number(vtr.delta_value);
+      }
+
+      let pctNum = null;
+      if (vtr.percent_change !== undefined && vtr.percent_change !== null) pctNum = Number(vtr.percent_change);
+
+      let deltaTxt = '—', deltaCls = 'syd-vtai-chg-neutral';
+      if (deltaNum !== null) {
+        if (vtr.delta_systolic !== undefined && vtr.delta_diastolic !== undefined) {
+          const dd = Number(vtr.delta_diastolic ?? 0);
+          deltaTxt = (deltaNum > 0 ? '+' : '') + parseFloat(deltaNum.toFixed(1))
+                   + ' / ' + (dd > 0 ? '+' : '') + parseFloat(dd.toFixed(1));
+        } else {
+          deltaTxt = (deltaNum > 0 ? '+' : '') + parseFloat(deltaNum.toFixed(1));
+        }
+        if (deltaNum > 0)      deltaCls = 'syd-vtai-chg-up';
+        else if (deltaNum < 0) deltaCls = 'syd-vtai-chg-down';
+      }
+
+      const pctTxt = pctNum !== null
+        ? (pctNum > 0 ? '+' : '') + parseFloat(pctNum.toFixed(1)) + '%'
+        : '—';
+
+      const arrow = deltaNum > 0 ? ' ↑' : (deltaNum < 0 ? ' ↓' : '');
+
+      // Significance tooltip
+      const sig = esc(vtr.clinical_significance || '');
+
+      h += `<tr class="syd-vtai-tr" title="${sig}">
+        <td class="syd-vtai-td syd-vtai-td-vital" style="color:${vc.color};border-left:3px solid ${vc.color};background:${vc.bg}">
+          ${esc(vtr.vital_sign || '')}
+        </td>
+        <td class="syd-vtai-td syd-vtai-td-num">${esc(fmt(prev))}</td>
+        <td class="syd-vtai-td syd-vtai-td-num syd-vtai-td-latest" style="color:${vc.color}">${esc(fmt(lat))}</td>
+        <td class="syd-vtai-td syd-vtai-td-num"><span class="${deltaCls}">${esc(deltaTxt)}${arrow}</span></td>
+        <td class="syd-vtai-td syd-vtai-td-num syd-vtai-td-pct">${esc(pctTxt)}</td>
+      </tr>`;
+
+      // Significance note row — only if non-trivial
+      if (sig && !sig.match(/^stable\s/i)) {
+        h += `<tr class="syd-vtai-sig-row">
+          <td colspan="5" class="syd-vtai-sig-td" style="border-left:3px solid ${vc.color}">
+            <span class="syd-vtai-sig-icon">ℹ</span> ${sig}
+          </td>
+        </tr>`;
+      }
+    });
+
+    h += `</tbody></table></div>`;
+  }
+
+  // ── Recommendations ───────────────────────────────────────────────────────
+  if (rec.action_items && rec.action_items.length) {
+    h += `<div class="syd-vtai-rec">
+      <div class="syd-vtai-rec-hdr">
+        <span class="syd-vtai-section-label">Recommendations</span>
+        <span class="syd-vtai-urg ${uMeta.cls}">
+          <span class="syd-vtai-urg-dot" style="background:${uMeta.dot}"></span>
+          ${esc(urgency)}
+        </span>
+      </div>
+      <div class="syd-vtai-actions">`;
+
+    rec.action_items.forEach((item, i) => {
+      h += `<div class="syd-vtai-action-item">
+        <span class="syd-vtai-action-num">${i + 1}</span>
+        <span class="syd-vtai-action-text">${esc(item)}</span>
+      </div>`;
+    });
+
+    h += `</div>`;
+
+    if (rec.follow_up_timeframe) {
+      h += `<div class="syd-vtai-followup">
+        <span class="syd-vtai-followup-icon">🗓</span>
+        <span><strong>Follow-up:</strong> ${esc(rec.follow_up_timeframe)}</span>
+      </div>`;
+    }
+
+    h += `</div>`;
+  }
+
+  h += `</div>`;
+  return h;
+}
 
 // ═══════════════════════════════════════════════════════
 // ADD THESE FUNCTIONS to the END of dashboard.js

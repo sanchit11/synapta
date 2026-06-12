@@ -2011,18 +2011,18 @@ function sydLoadVitalTrendsAI() {
   const ajaxUrl = (SYD.webroot || '') +
     '/interface/modules/custom_modules/oe-module-physician-dashboard/public/ajax.php';
 
-  fetch(ajaxUrl, { method: 'POST', body: fd })
-    .then(r => r.json())
-    .then(resp => {
-      document.getElementById('syd-vtai-loading-notice')?.remove();
-      if (resp.success && resp.data) {
-        SYD.vitalTrendsAI = resp.data;
-        container.innerHTML = sydBuildVtaiCardHtml(resp.data);
-      }
-    })
-    .catch(() => {
-      document.getElementById('syd-vtai-loading-notice')?.remove();
-    });
+  // fetch(ajaxUrl, { method: 'POST', body: fd })
+  //   .then(r => r.json())
+  //   .then(resp => {
+  //     document.getElementById('syd-vtai-loading-notice')?.remove();
+  //     if (resp.success && resp.data) {
+  //       SYD.vitalTrendsAI = resp.data;
+  //       container.innerHTML = sydBuildVtaiCardHtml(resp.data);
+  //     }
+  //   })
+  //   .catch(() => {
+  //     document.getElementById('syd-vtai-loading-notice')?.remove();
+  //   });
 }
 
 // ── Build AI Vitals Trend Card HTML (used by loader + sydUpdatePVI) ────────
