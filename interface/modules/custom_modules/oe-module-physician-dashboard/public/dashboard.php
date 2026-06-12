@@ -283,6 +283,67 @@ while ($row = sqlFetchArray($vhResult)) {
 }
 $vitalsHistory = array_reverse($vitalsHistory);
 
+// ── QUERY 7b: Last 3 vitals for PVI DB comparison ─────────────────────────────
+$vitalsLast3 = [];
+$vlt2 = sqlStatement(
+    "SELECT bps, bpd, pulse, temperature, respiration,
+            weight, height, BMI, oxygen_saturation, date
+     FROM   form_vitals
+     WHERE  pid = ? AND activity = 1
+     ORDER  BY date DESC
+     LIMIT  3",
+    [$pid]
+);
+while ($row = sqlFetchArray($vlt2)) {
+    $vitalsLast3[] = $row;
+}
+// vitalsLast3[0] = latest, vitalsLast3[1] = previous, vitalsLast3[2] = oldest
+
+// ── QUERY 7d: Negative / Abnormal Lab Results ────────────────────────────────
+$negativeLabResults = [];
+$labStmt = sqlStatement(
+    "SELECT poc.procedure_name,
+            pr.result_text        AS result_name,
+            pr.result,
+            pr.units,
+            pr.range,
+            pr.abnormal,
+            pr.comments,
+            COALESCE(pr.date, prep.date_report, po.date_ordered) AS result_date
+     FROM   procedure_order po
+     JOIN   procedure_order_code poc
+            ON  poc.procedure_order_id = po.procedure_order_id
+     JOIN   procedure_report prep
+            ON  prep.procedure_order_id  = po.procedure_order_id
+            AND prep.procedure_order_seq = poc.procedure_order_seq
+     JOIN   procedure_result pr
+            ON  pr.procedure_report_id = prep.procedure_report_id
+     WHERE  po.patient_id = ?
+       AND  po.activity   = 1
+       AND  pr.abnormal  IN ('yes','high','low')
+       AND  pr.result    != ''
+     ORDER  BY COALESCE(pr.date, prep.date_report, po.date_ordered) DESC
+     LIMIT  5",
+    [$pid]
+);
+while ($row = sqlFetchArray($labStmt)) {
+    $negativeLabResults[] = $row;
+}
+
+// ── QUERY 7c: Last 2 chief complaints ────────────────────────────────────────
+$chiefComplaints = [];
+$ccResult = sqlStatement(
+    "SELECT complaint_text, severity, duration, associated_symptoms, date_created
+     FROM   patient_chief_complaint
+     WHERE  pid = ?
+     ORDER  BY date_created DESC
+     LIMIT  2",
+    [$pid]
+);
+while ($row = sqlFetchArray($ccResult)) {
+    $chiefComplaints[] = $row;
+}
+
 // ── QUERY 8: Problem List ─────────────────────────────────────────────────────
 $problems = [];
 $probResult = sqlStatement(
@@ -3129,7 +3190,126 @@ function formatValues($value, $decimals = 1)
               ];
           }
 
-          foreach ($bullets as $bullet): ?>
+          // ── DB Vitals Trend Card (AI analysis loaded async by sydLoadVitalTrendsAI) ──
+          $latV  = $vitalsLast3[0] ?? null;
+          $prevV = $vitalsLast3[1] ?? null;
+
+          if ($latV):
+              $latDate  = $latV['date']  ? date('M d, Y', strtotime($latV['date']))  : '—';
+              $prevDate = $prevV && $prevV['date'] ? date('M d, Y', strtotime($prevV['date'])) : null;
+
+              function vDelta($old, $new) {
+                  if ($old === null || $old === '' || $new === null || $new === '') return null;
+                  $d = round((float)$new - (float)$old, 1);
+                  return ($d > 0 ? '+' : '') . $d;
+              }
+              function vTrend($old, $new) {
+                  if ($old === null || $old === '' || $new === null || $new === '') return null;
+                  $d = (float)$new - (float)$old;
+                  if ($d > 0) return 'up';
+                  if ($d < 0) return 'down';
+                  return 'same';
+              }
+          ?>
+          <div id="syd-vtai-container">
+          <div class="syd-pvi-vt-card">
+              <div class="syd-pvi-vt-title">
+                  📈 Vitals Trend — DB Comparison
+                  <?php if ($prevDate): ?>
+                  <span class="syd-pvi-vt-sub"><?php echo htmlspecialchars($prevDate); ?> → <?php echo htmlspecialchars($latDate); ?></span>
+                  <?php else: ?>
+                  <span class="syd-pvi-vt-sub">Latest: <?php echo htmlspecialchars($latDate); ?></span>
+                  <?php endif; ?>
+              </div>
+              <div class="syd-pvi-vt-table">
+                  <div class="syd-pvi-vt-row syd-pvi-vt-hdr">
+                      <span>Vital</span>
+                      <span><?php echo $prevDate ? 'Previous' : '—'; ?></span>
+                      <span>Latest</span>
+                      <span>Δ</span>
+                  </div>
+                  <?php
+                  $latBP   = ($latV['bps'] && $latV['bpd'])   ? $latV['bps'].'/'.$latV['bpd'].' mmHg'   : '—';
+                  $prevBP  = ($prevV && $prevV['bps'] && $prevV['bpd']) ? $prevV['bps'].'/'.$prevV['bpd'].' mmHg' : ($prevV ? '—' : null);
+                  $bpTr    = $prevV ? vTrend($prevV['bps'], $latV['bps']) : null;
+                  $bpDelta = $prevV ? vDelta($prevV['bps'], $latV['bps']) : null;
+                  $bpAlert = ($latV['bps'] ?? 0) >= 130;
+                  ?>
+                  <div class="syd-pvi-vt-row <?php echo $bpAlert ? 'syd-pvi-vt-alert' : ''; ?>">
+                      <span>Blood Pressure</span>
+                      <span class="syd-pvi-vt-prev"><?php echo $prevBP !== null ? htmlspecialchars($prevBP) : '—'; ?></span>
+                      <span class="syd-pvi-vt-lat <?php echo $bpAlert ? 'syd-pvi-vt-warn' : ''; ?>"><?php echo htmlspecialchars($latBP); ?></span>
+                      <span class="syd-pvi-vt-delta">
+                          <?php if ($bpDelta): ?><span class="syd-pvi-vt-chip syd-pvi-vt-chip-<?php echo $bpTr; ?>"><?php echo htmlspecialchars($bpDelta); ?></span><?php elseif ($bpTr === 'same'): ?>→<?php endif; ?>
+                          <?php if ($bpTr): ?><span class="syd-pvi-vt-arrow syd-pvi-vt-<?php echo $bpTr; ?>"><?php echo $bpTr==='up'?'▲':($bpTr==='down'?'▼':'→'); ?></span><?php endif; ?>
+                      </span>
+                  </div>
+                  <?php $pulseTr = $prevV ? vTrend($prevV['pulse'], $latV['pulse']) : null; $pulseDelta = $prevV ? vDelta($prevV['pulse'], $latV['pulse']) : null; ?>
+                  <div class="syd-pvi-vt-row">
+                      <span>Pulse</span>
+                      <span class="syd-pvi-vt-prev"><?php echo $prevV ? htmlspecialchars(($prevV['pulse'] ?? '—').' bpm') : '—'; ?></span>
+                      <span class="syd-pvi-vt-lat"><?php echo htmlspecialchars(($latV['pulse'] ?? '—').' bpm'); ?></span>
+                      <span class="syd-pvi-vt-delta">
+                          <?php if ($pulseDelta): ?><span class="syd-pvi-vt-chip syd-pvi-vt-chip-<?php echo $pulseTr; ?>"><?php echo htmlspecialchars($pulseDelta); ?></span><?php endif; ?>
+                          <?php if ($pulseTr): ?><span class="syd-pvi-vt-arrow syd-pvi-vt-<?php echo $pulseTr; ?>"><?php echo $pulseTr==='up'?'▲':($pulseTr==='down'?'▼':'→'); ?></span><?php endif; ?>
+                      </span>
+                  </div>
+                  <?php $respTr = $prevV ? vTrend($prevV['respiration'], $latV['respiration']) : null; $respDelta = $prevV ? vDelta($prevV['respiration'], $latV['respiration']) : null; ?>
+                  <div class="syd-pvi-vt-row">
+                      <span>Respiration</span>
+                      <span class="syd-pvi-vt-prev"><?php echo $prevV ? htmlspecialchars(($prevV['respiration'] ?? '—').' br/min') : '—'; ?></span>
+                      <span class="syd-pvi-vt-lat"><?php echo htmlspecialchars(($latV['respiration'] ?? '—').' br/min'); ?></span>
+                      <span class="syd-pvi-vt-delta">
+                          <?php if ($respDelta): ?><span class="syd-pvi-vt-chip syd-pvi-vt-chip-<?php echo $respTr; ?>"><?php echo htmlspecialchars($respDelta); ?></span><?php endif; ?>
+                          <?php if ($respTr): ?><span class="syd-pvi-vt-arrow syd-pvi-vt-<?php echo $respTr; ?>"><?php echo $respTr==='up'?'▲':($respTr==='down'?'▼':'→'); ?></span><?php endif; ?>
+                      </span>
+                  </div>
+                  <?php $tempTr = $prevV ? vTrend($prevV['temperature'], $latV['temperature']) : null; $tempDelta = $prevV ? vDelta($prevV['temperature'], $latV['temperature']) : null; $tempAlert = ($latV['temperature'] ?? 0) > 100.4; ?>
+                  <div class="syd-pvi-vt-row <?php echo $tempAlert ? 'syd-pvi-vt-alert' : ''; ?>">
+                      <span>Temperature</span>
+                      <span class="syd-pvi-vt-prev"><?php echo $prevV ? htmlspecialchars(($prevV['temperature'] ?? '—').' °F') : '—'; ?></span>
+                      <span class="syd-pvi-vt-lat <?php echo $tempAlert ? 'syd-pvi-vt-warn' : ''; ?>"><?php echo htmlspecialchars(($latV['temperature'] ?? '—').' °F'); ?></span>
+                      <span class="syd-pvi-vt-delta">
+                          <?php if ($tempDelta): ?><span class="syd-pvi-vt-chip syd-pvi-vt-chip-<?php echo $tempTr; ?>"><?php echo htmlspecialchars($tempDelta); ?></span><?php endif; ?>
+                          <?php if ($tempTr): ?><span class="syd-pvi-vt-arrow syd-pvi-vt-<?php echo $tempTr; ?>"><?php echo $tempTr==='up'?'▲':($tempTr==='down'?'▼':'→'); ?></span><?php endif; ?>
+                      </span>
+                  </div>
+                  <?php $o2Tr = $prevV ? vTrend($prevV['oxygen_saturation'], $latV['oxygen_saturation']) : null; $o2Delta = $prevV ? vDelta($prevV['oxygen_saturation'], $latV['oxygen_saturation']) : null; $o2Alert = ($latV['oxygen_saturation'] ?? 100) < 95; ?>
+                  <div class="syd-pvi-vt-row <?php echo $o2Alert ? 'syd-pvi-vt-alert' : ''; ?>">
+                      <span>O₂ Saturation</span>
+                      <span class="syd-pvi-vt-prev"><?php echo $prevV ? htmlspecialchars(($prevV['oxygen_saturation'] ?? '—').' %') : '—'; ?></span>
+                      <span class="syd-pvi-vt-lat <?php echo $o2Alert ? 'syd-pvi-vt-warn' : ''; ?>"><?php echo htmlspecialchars(($latV['oxygen_saturation'] ?? '—').' %'); ?></span>
+                      <span class="syd-pvi-vt-delta">
+                          <?php if ($o2Delta): ?><span class="syd-pvi-vt-chip syd-pvi-vt-chip-<?php echo $o2Tr; ?>"><?php echo htmlspecialchars($o2Delta); ?></span><?php endif; ?>
+                          <?php if ($o2Tr): ?><span class="syd-pvi-vt-arrow syd-pvi-vt-<?php echo $o2Tr; ?>"><?php echo $o2Tr==='up'?'▲':($o2Tr==='down'?'▼':'→'); ?></span><?php endif; ?>
+                      </span>
+                  </div>
+                  <?php $wtTr = $prevV ? vTrend($prevV['weight'], $latV['weight']) : null; $wtDelta = $prevV ? vDelta($prevV['weight'], $latV['weight']) : null; ?>
+                  <div class="syd-pvi-vt-row">
+                      <span>Weight</span>
+                      <span class="syd-pvi-vt-prev"><?php echo $prevV ? htmlspecialchars(($prevV['weight'] ?? '—').' lbs') : '—'; ?></span>
+                      <span class="syd-pvi-vt-lat"><?php echo htmlspecialchars(($latV['weight'] ?? '—').' lbs'); ?></span>
+                      <span class="syd-pvi-vt-delta">
+                          <?php if ($wtDelta): ?><span class="syd-pvi-vt-chip syd-pvi-vt-chip-<?php echo $wtTr; ?>"><?php echo htmlspecialchars($wtDelta); ?></span><?php endif; ?>
+                          <?php if ($wtTr): ?><span class="syd-pvi-vt-arrow syd-pvi-vt-<?php echo $wtTr; ?>"><?php echo $wtTr==='up'?'▲':($wtTr==='down'?'▼':'→'); ?></span><?php endif; ?>
+                      </span>
+                  </div>
+                  <?php $bmiTr = $prevV ? vTrend($prevV['BMI'], $latV['BMI']) : null; $bmiDelta = $prevV ? vDelta($prevV['BMI'], $latV['BMI']) : null; $bmiAlert = ($latV['BMI'] ?? 0) >= 30; ?>
+                  <div class="syd-pvi-vt-row <?php echo $bmiAlert ? 'syd-pvi-vt-alert' : ''; ?>">
+                      <span>BMI</span>
+                      <span class="syd-pvi-vt-prev"><?php echo $prevV ? htmlspecialchars($prevV['BMI'] ?? '—') : '—'; ?></span>
+                      <span class="syd-pvi-vt-lat <?php echo $bmiAlert ? 'syd-pvi-vt-warn' : ''; ?>"><?php echo htmlspecialchars($latV['BMI'] ?? '—'); ?></span>
+                      <span class="syd-pvi-vt-delta">
+                          <?php if ($bmiDelta): ?><span class="syd-pvi-vt-chip syd-pvi-vt-chip-<?php echo $bmiTr; ?>"><?php echo htmlspecialchars($bmiDelta); ?></span><?php endif; ?>
+                          <?php if ($bmiTr): ?><span class="syd-pvi-vt-arrow syd-pvi-vt-<?php echo $bmiTr; ?>"><?php echo $bmiTr==='up'?'▲':($bmiTr==='down'?'▼':'→'); ?></span><?php endif; ?>
+                      </span>
+                  </div>
+              </div>
+          </div>
+          </div><!-- /#syd-vtai-container -->
+          <?php endif; // $latV ?>
+
+          <?php foreach ($bullets as $bullet): ?>
                         <div class="syd-intel-item syd-intel-<?php echo $bullet['type']; ?> ">
                             <span class="syd-intel-dot"></span>
                             <span class="syd-intel-text">
@@ -3141,7 +3321,115 @@ function formatValues($value, $decimals = 1)
                     </div>
                 </div>
 
-                <!-- ── SECTION 2: Drug Interaction Alerts ── -->
+                <!-- ── SECTION 2: Chief Complaints ── -->
+                    <div class="syd-aip-section syd-cc-section " style="margin-top: 10px; background-color: var(--blue-l); border: 1px solid rgba(66, 133, 244, .2);">                    <div class="syd-aip-section-title">
+                        <span>🗣 Last Complaints</span>
+                        <span class="syd-aip-count"><?php echo count($chiefComplaints); ?> recent</span>
+                    </div>
+
+                    <div class="syd-cc-body">
+                    <?php if (empty($chiefComplaints)): ?>
+                        <div class="syd-cc-empty">No complaints on record</div>
+                    <?php else: ?>
+                        <?php foreach ($chiefComplaints as $idx => $cc): ?>
+                        <div class="syd-cc-card <?php echo $idx === 0 ? 'syd-cc-card-latest' : ''; ?>">
+
+                            <!-- Date badge + complaint text -->
+                            <div class="syd-cc-header">
+                                <?php if ($idx === 0): ?>
+                                    <span class="syd-cc-badge-latest">Latest</span>
+                                <?php else: ?>
+                                    <span class="syd-cc-badge-prev">Previous</span>
+                                <?php endif; ?>
+                                <span class="syd-cc-date">
+                                    <?php echo htmlspecialchars(date('M j, Y', strtotime($cc['date_created']))); ?>
+                                </span>
+                            </div>
+
+                            <div class="syd-cc-text">
+                                <?php echo htmlspecialchars($cc['complaint_text'] ?? '—'); ?>
+                            </div>
+
+                            <!-- Optional metadata — only show if not null/empty -->
+                            <?php
+                            $meta = [];
+                            if (!empty($cc['severity']))             $meta[] = ['icon' => '⚡', 'label' => 'Severity',    'val' => $cc['severity']];
+                            if (!empty($cc['duration']))             $meta[] = ['icon' => '⏱',  'label' => 'Duration',    'val' => $cc['duration']];
+                            if (!empty($cc['associated_symptoms']))  $meta[] = ['icon' => '🔗', 'label' => 'Associated',  'val' => $cc['associated_symptoms']];
+                            ?>
+                            <?php if (!empty($meta)): ?>
+                            <div class="syd-cc-meta">
+                                <?php foreach ($meta as $m): ?>
+                                <div class="syd-cc-meta-row">
+                                    <span class="syd-cc-meta-icon"><?php echo $m['icon']; ?></span>
+                                    <span class="syd-cc-meta-label"><?php echo htmlspecialchars($m['label']); ?></span>
+                                    <span class="syd-cc-meta-val"><?php echo htmlspecialchars($m['val']); ?></span>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <?php endif; ?>
+
+                        </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- ── SECTION 3: Negative Lab Results ── -->
+                <div class="syd-aip-section syd-lab-section fade">
+                    <div class="syd-aip-section-title">
+                        <span>🧪 Negative Lab Results</span>
+                        <span class="syd-aip-count"><?php echo count($negativeLabResults); ?> flagged</span>
+                    </div>
+
+                    <div class="syd-lab-body">
+                    <?php if (empty($negativeLabResults)): ?>
+                        <div class="syd-lab-empty">No abnormal results on record</div>
+                    <?php else: ?>
+                        <?php foreach ($negativeLabResults as $lab): ?>
+                        <?php
+                            $abnormal   = strtolower(trim($lab['abnormal'] ?? ''));
+                            $abnCls     = $abnormal === 'high' ? 'syd-lab-high'
+                                        : ($abnormal === 'low'  ? 'syd-lab-low'  : 'syd-lab-abn');
+                            $abnLabel   = $abnormal === 'high' ? '↑ High'
+                                        : ($abnormal === 'low'  ? '↓ Low'  : '⚠ Abnormal');
+                            $testName   = !empty($lab['result_name']) && $lab['result_name'] !== $lab['procedure_name']
+                                        ? $lab['procedure_name'] . ' — ' . $lab['result_name']
+                                        : ($lab['procedure_name'] ?: $lab['result_name']);
+                            $resultDate = !empty($lab['result_date'])
+                                        ? date('M j, Y', strtotime($lab['result_date'])) : '—';
+                            $rangeStr   = !empty($lab['range'])  ? $lab['range']  : null;
+                            $unitStr    = !empty($lab['units'])  ? $lab['units']  : null;
+                            $commentStr = !empty($lab['comments']) ? $lab['comments'] : null;
+                        ?>
+                        <div class="syd-lab-card <?php echo $abnCls; ?>">
+                            <div class="syd-lab-card-header">
+                                <span class="syd-lab-name"><?php echo htmlspecialchars($testName); ?></span>
+                                <span class="syd-lab-date"><?php echo htmlspecialchars($resultDate); ?></span>
+                            </div>
+                            <div class="syd-lab-result-row">
+                                <span class="syd-lab-result-val">
+                                    <?php echo htmlspecialchars($lab['result']); ?>
+                                    <?php if ($unitStr): ?><span class="syd-lab-unit"><?php echo htmlspecialchars($unitStr); ?></span><?php endif; ?>
+                                </span>
+                                <span class="syd-lab-badge <?php echo $abnCls; ?>"><?php echo $abnLabel; ?></span>
+                            </div>
+                            <?php if ($rangeStr): ?>
+                            <div class="syd-lab-range">
+                                <span class="syd-lab-range-lbl">Reference:</span>
+                                <?php echo htmlspecialchars($rangeStr); ?>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($commentStr): ?>
+                            <div class="syd-lab-comment"><?php echo htmlspecialchars($commentStr); ?></div>
+                            <?php endif; ?>
+                        </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- ── SECTION 4: Drug Interaction Alerts ── -->
 
                 <!-- =========================
      DRUG ALERTS CARD
@@ -3519,7 +3807,13 @@ function formatValues($value, $decimals = 1)
         pid: <?php echo (int)$pid; ?>,
         encounter: <?php echo (int)$encounter; ?>,
         csrf: "<?php echo $csrfToken; ?>",
-        webroot: "<?php echo $GLOBALS['webroot']; ?>"
+        webroot: "<?php echo $GLOBALS['webroot']; ?>",
+        dbVitals: <?php echo json_encode([
+            'latest'   => $vitalsLast3[0] ?? null,
+            'previous' => $vitalsLast3[1] ?? null,
+            'oldest'   => $vitalsLast3[2] ?? null,
+        ]); ?>,
+        vitalTrendsAI: null  // populated async by sydLoadVitalTrendsAI()
     };
     </script>
 

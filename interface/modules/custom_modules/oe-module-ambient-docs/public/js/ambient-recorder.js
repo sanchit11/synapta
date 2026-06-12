@@ -621,6 +621,187 @@
             body.appendChild(card);
         }
 
+        // ── 1b. DB Vitals Trend — last 2 readings from the database ──────────
+        const dbV = (typeof SYD !== 'undefined' && SYD.dbVitals) ? SYD.dbVitals : null;
+        if (dbV && dbV.latest) {
+            const prev   = dbV.previous;  // may be null if only 1 reading on record
+            const latest = dbV.latest;
+
+            // Format date helper (YYYY-MM-DD HH:MM:SS → "Mon DD")
+            function _fmtDate(d) {
+                if (!d) return '';
+                const dt = new Date(d.replace(' ', 'T'));
+                return isNaN(dt) ? String(d).slice(0, 10)
+                    : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+
+            const prevDate   = _fmtDate(prev   && prev.date);
+            const latestDate = _fmtDate(latest.date);
+
+            const subtitle = prev
+                ? 'Previous (' + prevDate + ') → Latest (' + latestDate + ')'
+                : 'Latest reading: ' + latestDate;
+            const dbCard = _pviCard('📈 Vitals Trend — DB Comparison', subtitle);
+
+            // Column header row
+            const colHdr = document.createElement('div');
+            colHdr.className = 'pvi-cmp-row pvi-cmp-header';
+            colHdr.innerHTML = '<span class="pvi-cmp-label">Vital</span>'
+                + '<span class="pvi-cmp-past">'    + (prev ? 'Previous' : '—') + '</span>'
+                + '<span class="pvi-cmp-present">Latest</span>'
+                + '<span class="pvi-cmp-trend">Δ</span>';
+            dbCard.appendChild(colHdr);
+
+            // Helper: compute delta string  e.g. "+12" / "–5" / "—"
+            function _delta(pRaw, nRaw) {
+                const p = _numVal(pRaw), n = _numVal(nRaw);
+                if (p === null || n === null) return null;
+                const d = Math.round((n - p) * 10) / 10;
+                return (d > 0 ? '+' : '') + d;
+            }
+
+            // Blood Pressure
+            const latBP  = latest.bps && latest.bpd ? latest.bps + '/' + latest.bpd : null;
+            const prevBP  = prev && prev.bps && prev.bpd ? prev.bps + '/' + prev.bpd : null;
+            const bpSysTr = _compareNum(prev && prev.bps, latest.bps);
+            const bpDiaTr = _compareNum(prev && prev.bpd, latest.bpd);
+            const dbBpTrend   = (bpSysTr === 'up' || bpDiaTr === 'up')   ? 'up'
+                              : (bpSysTr === 'down' && bpDiaTr === 'down') ? 'down'
+                              : (bpSysTr === 'same' && bpDiaTr === 'same') ? 'same' : null;
+            const dbBpAlert   = _numVal(latest.bps) >= 130;
+            const bpDeltaStr  = prev ? (_delta(prev.bps, latest.bps) !== null
+                ? _delta(prev.bps, latest.bps) + '/' + _delta(prev.bpd, latest.bpd) + ' mmHg' : '—') : '—';
+            const bpRow = _cmpRow(
+                'Blood Pressure',
+                prevBP  ? prevBP  + ' mmHg' : (prev ? '—' : null),
+                latBP   ? latBP   + ' mmHg' : '—',
+                dbBpTrend,
+                dbBpAlert
+            );
+            // Append delta chip
+            if (bpDeltaStr !== '—' && prev) {
+                const chip = document.createElement('span');
+                chip.className = 'pvi-delta' + (dbBpTrend === 'up' ? ' pvi-delta-up' : dbBpTrend === 'down' ? ' pvi-delta-down' : '');
+                chip.textContent = bpDeltaStr;
+                bpRow.querySelector('.pvi-cmp-trend').appendChild(chip);
+            }
+            dbCard.appendChild(bpRow);
+
+            // Pulse
+            const pulseTr = _compareNum(prev && prev.pulse, latest.pulse);
+            const pulseRow = _cmpRow(
+                'Pulse',
+                prev ? (_numVal(prev.pulse) !== null ? prev.pulse + ' bpm' : '—') : null,
+                _numVal(latest.pulse) !== null ? latest.pulse + ' bpm' : '—',
+                pulseTr, false
+            );
+            if (prev && _delta(prev.pulse, latest.pulse) !== null) {
+                const chip = document.createElement('span');
+                chip.className = 'pvi-delta' + (pulseTr === 'up' ? ' pvi-delta-up' : pulseTr === 'down' ? ' pvi-delta-down' : '');
+                chip.textContent = _delta(prev.pulse, latest.pulse) + ' bpm';
+                pulseRow.querySelector('.pvi-cmp-trend').appendChild(chip);
+            }
+            dbCard.appendChild(pulseRow);
+
+            // Temperature
+            const tempTr = _compareNum(prev && prev.temperature, latest.temperature);
+            const tempRow = _cmpRow(
+                'Temperature',
+                prev ? (_numVal(prev.temperature) !== null ? prev.temperature + ' °F' : '—') : null,
+                _numVal(latest.temperature) !== null ? latest.temperature + ' °F' : '—',
+                tempTr, false
+            );
+            if (prev && _delta(prev.temperature, latest.temperature) !== null) {
+                const chip = document.createElement('span');
+                chip.className = 'pvi-delta' + (tempTr === 'up' ? ' pvi-delta-up' : tempTr === 'down' ? ' pvi-delta-down' : '');
+                chip.textContent = _delta(prev.temperature, latest.temperature) + ' °F';
+                tempRow.querySelector('.pvi-cmp-trend').appendChild(chip);
+            }
+            dbCard.appendChild(tempRow);
+
+            // Respiration
+            const respTr = _compareNum(prev && prev.respiration, latest.respiration);
+            const respRow = _cmpRow(
+                'Respiration',
+                prev ? (_numVal(prev.respiration) !== null ? prev.respiration + ' br/min' : '—') : null,
+                _numVal(latest.respiration) !== null ? latest.respiration + ' br/min' : '—',
+                respTr, false
+            );
+            if (prev && _delta(prev.respiration, latest.respiration) !== null) {
+                const chip = document.createElement('span');
+                chip.className = 'pvi-delta' + (respTr === 'up' ? ' pvi-delta-up' : respTr === 'down' ? ' pvi-delta-down' : '');
+                chip.textContent = _delta(prev.respiration, latest.respiration) + ' br/min';
+                respRow.querySelector('.pvi-cmp-trend').appendChild(chip);
+            }
+            dbCard.appendChild(respRow);
+
+            // O₂ Saturation
+            const o2Tr    = _compareNum(prev && prev.oxygen_saturation, latest.oxygen_saturation);
+            const o2Alert = _numVal(latest.oxygen_saturation) !== null && _numVal(latest.oxygen_saturation) < 95;
+            const o2Row   = _cmpRow(
+                'O₂ Saturation',
+                prev ? (_numVal(prev.oxygen_saturation) !== null ? prev.oxygen_saturation + ' %' : '—') : null,
+                _numVal(latest.oxygen_saturation) !== null ? latest.oxygen_saturation + ' %' : '—',
+                o2Tr, o2Alert
+            );
+            if (prev && _delta(prev.oxygen_saturation, latest.oxygen_saturation) !== null) {
+                const chip = document.createElement('span');
+                chip.className = 'pvi-delta' + (o2Tr === 'down' ? ' pvi-delta-down' : o2Tr === 'up' ? ' pvi-delta-up' : '');
+                chip.textContent = _delta(prev.oxygen_saturation, latest.oxygen_saturation) + ' %';
+                o2Row.querySelector('.pvi-cmp-trend').appendChild(chip);
+            }
+            dbCard.appendChild(o2Row);
+
+            // Weight
+            const wtTr  = _compareNum(prev && prev.weight, latest.weight);
+            const wtRow = _cmpRow(
+                'Weight',
+                prev ? (_numVal(prev.weight) !== null ? prev.weight + ' lbs' : '—') : null,
+                _numVal(latest.weight) !== null ? latest.weight + ' lbs' : '—',
+                wtTr, false
+            );
+            if (prev && _delta(prev.weight, latest.weight) !== null) {
+                const chip = document.createElement('span');
+                chip.className = 'pvi-delta' + (wtTr === 'up' ? ' pvi-delta-up' : wtTr === 'down' ? ' pvi-delta-down' : '');
+                chip.textContent = _delta(prev.weight, latest.weight) + ' lbs';
+                wtRow.querySelector('.pvi-cmp-trend').appendChild(chip);
+            }
+            dbCard.appendChild(wtRow);
+
+            // BMI
+            const bmiTr  = _compareNum(prev && prev.BMI, latest.BMI);
+            const bmiAlert = _numVal(latest.BMI) >= 30;
+            const bmiRow = _cmpRow(
+                'BMI',
+                prev ? (_numVal(prev.BMI) !== null ? String(prev.BMI) : '—') : null,
+                _numVal(latest.BMI) !== null ? String(latest.BMI) : '—',
+                bmiTr, bmiAlert
+            );
+            if (prev && _delta(prev.BMI, latest.BMI) !== null) {
+                const chip = document.createElement('span');
+                chip.className = 'pvi-delta' + (bmiTr === 'up' ? ' pvi-delta-up' : bmiTr === 'down' ? ' pvi-delta-down' : '');
+                chip.textContent = _delta(prev.BMI, latest.BMI);
+                bmiRow.querySelector('.pvi-cmp-trend').appendChild(chip);
+            }
+            dbCard.appendChild(bmiRow);
+
+            // Alert banner if any elevation detected
+            const hasElevation = dbBpAlert || o2Alert || bmiAlert;
+            if (hasElevation) {
+                dbCard.classList.add('pvi-card-alert');
+                const banner = document.createElement('div');
+                banner.className = 'pvi-alert-banner';
+                const alerts = [];
+                if (dbBpAlert)  alerts.push('🚨 BP ' + (latBP || '') + ' mmHg — Elevated');
+                if (o2Alert)    alerts.push('⚠️ O₂ ' + latest.oxygen_saturation + '% — Low');
+                if (bmiAlert)   alerts.push('⚠️ BMI ' + latest.BMI + ' — Obese');
+                banner.innerHTML = alerts.join(' &nbsp;|&nbsp; ');
+                dbCard.insertBefore(banner, dbCard.firstChild.nextSibling); // after card header
+            }
+
+            body.appendChild(dbCard);
+        }
+
         // ── 2. Complaints ─────────────────────────────────────────────────────
         const complaints = cs.complaints;
         if (complaints) {
@@ -963,7 +1144,7 @@
 
         // ── Pre-Visit Intelligence Panel ──────────────────────────────────────
         if (state.clinicalSummary) {
-            bodySpace.appendChild(_buildPrefVisitPanel(state.clinicalSummary));
+            bodySpace.appendChild(_buildPreVisitPanel(state.clinicalSummary));
         }
 
         const clinicalSections = ['subjective', 'objective', 'assessment', 'plan'];
@@ -1272,6 +1453,10 @@
             .pvi-da-row.pvi-da-warn   .pvi-da-sev { background: #fff3cd; color: #856404; }
             .pvi-da-text { color: #495057; font-size: 11px; margin-top: 2px; }
             .pvi-da-rec  { font-style: italic; margin-top: 2px; }
+            /* DB vitals delta chip */
+            .pvi-delta { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 4px; margin-left: 4px; background: #e9ecef; color: #495057; }
+            .pvi-delta-up   { background: #f8d7da; color: #721c24; }
+            .pvi-delta-down { background: #d4edda; color: #155724; }
         `;
         document.head.appendChild(styleSheet);
     }

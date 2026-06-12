@@ -252,6 +252,147 @@ switch ($action) {
         echo json_encode(['success' => true, 'action' => 'created']);
     }
     break;
+  case 'vital_trends':
+    set_time_limit(480); // allow up to 8 min — AI model can be slow
+    // ── Fetch last 3 vitals ────────────────────────────────────────────────
+    $vt3  = [];
+    $stmt = sqlStatement(
+        "SELECT bps, bpd, pulse, temperature, respiration,
+                weight, height, BMI, oxygen_saturation, date
+         FROM   form_vitals
+         WHERE  pid = ? AND activity = 1
+         ORDER  BY date DESC LIMIT 3",
+        [$pid]
+    );
+    while ($r = sqlFetchArray($stmt)) { $vt3[] = $r; }
+
+    if (empty($vt3)) {
+        echo json_encode(['error' => 'No vitals found']); break;
+    }
+
+    // ── Patient info ───────────────────────────────────────────────────────
+    $patInfo = sqlQuery(
+        "SELECT sex, TIMESTAMPDIFF(YEAR, DOB, CURDATE()) AS age FROM patient_data WHERE pid = ?",
+        [$pid]
+    );
+    $vtAge = (int)($patInfo['age'] ?? 0);
+    $vtSex = substr($patInfo['sex'] ?? 'Unknown', 0, 1) ?: 'Unknown';
+
+    $vtProblems = [];
+    $pStmt = sqlStatement(
+        "SELECT title, diagnosis FROM lists
+         WHERE  pid = ? AND (type='medical_problem' OR type='medication') AND activity=1",
+        [$pid]
+    );
+    while ($r = sqlFetchArray($pStmt)) {
+        $t = trim(($r['title'] ?? '') . (!empty($r['diagnosis']) ? ' ('.$r['diagnosis'].')' : ''));
+        if ($t) $vtProblems[] = $t;
+    }
+
+    $vtMeds = [];
+    $mStmt = sqlStatement(
+        "SELECT drug, size, dosage FROM prescriptions WHERE patient_id = ? AND active = 1",
+        [$pid]
+    );
+    while ($r = sqlFetchArray($mStmt)) {
+        $t = trim(($r['drug'] ?? '') . ' ' . ($r['size'] ?? '') . ($r['dosage'] ?? ''));
+        if ($t) $vtMeds[] = $t;
+    }
+
+    $vtAllergies = [];
+    $aStmt = sqlStatement(
+        "SELECT title FROM lists WHERE pid = ? AND type='allergy' AND activity=1",
+        [$pid]
+    );
+    while ($r = sqlFetchArray($aStmt)) {
+        if (!empty($r['title'])) $vtAllergies[] = $r['title'];
+    }
+
+    // ── Build payload ──────────────────────────────────────────────────────
+    $fnD = function($old, $new) {
+        if ($old===null||$old===''||$new===null||$new==='') return ['value'=>null,'direction'=>null,'percent_change'=>null];
+        $o=(float)$old; $n=(float)$new; $d=round($n-$o,2);
+        $pct=$o!=0?round(($d/abs($o))*100,1):null;
+        return ['value'=>$d,'direction'=>$d>0?'up':($d<0?'down':'same'),'percent_change'=>$pct];
+    };
+
+    $rLabels  = ['latest','previous','oldest'];
+    $readings = [];
+    foreach ($vt3 as $idx => $v) {
+        $nv = function($k) use ($v) { return ($v[$k]!==''&&$v[$k]!==null)?(float)$v[$k]:null; };
+        $readings[] = [
+            'reading'           => $rLabels[$idx] ?? ('reading_'.$idx),
+            'date'              => $v['date'] ? date('Y-m-d', strtotime($v['date'])) : null,
+            'blood_pressure'    => ['systolic'=>$nv('bps'),'diastolic'=>$nv('bpd'),'unit'=>'mmHg'],
+            'pulse'             => ['value'=>$nv('pulse'),'unit'=>'bpm'],
+            'temperature'       => ['value'=>$nv('temperature'),'unit'=>'°F'],
+            'respiration'       => ['value'=>$nv('respiration'),'unit'=>'br/min'],
+            'oxygen_saturation' => ['value'=>$nv('oxygen_saturation'),'unit'=>'%'],
+            'weight'            => ['value'=>$nv('weight'),'unit'=>'lbs'],
+            'height'            => ['value'=>$nv('height'),'unit'=>'in'],
+            'bmi'               => ['value'=>$nv('BMI')],
+        ];
+    }
+
+    $d3=$vt3[0]; $p3=$vt3[1]??[];
+    $deltas = [
+        'systolic_bp'       => $fnD($p3['bps']??null,$d3['bps']??null),
+        'diastolic_bp'      => $fnD($p3['bpd']??null,$d3['bpd']??null),
+        'pulse'             => $fnD($p3['pulse']??null,$d3['pulse']??null),
+        'temperature'       => $fnD($p3['temperature']??null,$d3['temperature']??null),
+        'respiration'       => $fnD($p3['respiration']??null,$d3['respiration']??null),
+        'oxygen_saturation' => $fnD($p3['oxygen_saturation']??null,$d3['oxygen_saturation']??null),
+        'weight'            => $fnD($p3['weight']??null,$d3['weight']??null),
+        'bmi'               => $fnD($p3['BMI']??null,$d3['BMI']??null),
+    ];
+
+    $vtPayload = [
+        'patient_info' => [
+            'pid'                => $pid,
+            'age'                => $vtAge,
+            'sex'                => $vtSex,
+            'active_problems'    => $vtProblems,
+            'active_medications' => $vtMeds,
+            'allergies'          => $vtAllergies,
+        ],
+        'vitals_readings' => $readings,
+        'deltas'          => $deltas,
+    ];
+
+    // ── Call FastAPI /vital_trends ─────────────────────────────────────────
+    $ch = curl_init('http://localhost:8000/vital_trends');
+    if ($ch === false) {
+        echo json_encode(['error' => 'cURL unavailable']); break;
+    }
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => json_encode($vtPayload, JSON_UNESCAPED_UNICODE),
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'Accept: application/json'],
+        CURLOPT_TIMEOUT        => 480,
+        CURLOPT_CONNECTTIMEOUT => 10,
+    ]);
+    $vtRaw  = curl_exec($ch);
+    $vtCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if (!$vtRaw || $vtCode !== 200) {
+        echo json_encode(['error' => 'API unavailable (HTTP '.$vtCode.')']); break;
+    }
+
+    $vtDec = json_decode($vtRaw, true);
+    if (!$vtDec || !isset($vtDec['clinical_analysis'])) {
+        echo json_encode(['error' => 'Invalid API response']); break;
+    }
+
+    // Normalise: move recommendations to top level if nested inside clinical_analysis
+    if (!isset($vtDec['recommendations']) && isset($vtDec['clinical_analysis']['recommendations'])) {
+        $vtDec['recommendations'] = $vtDec['clinical_analysis']['recommendations'];
+    }
+
+    echo json_encode(['success' => true, 'data' => $vtDec]);
+    break;
+
   default:
     echo json_encode(['error' => 'Unknown action']);
 }

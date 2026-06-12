@@ -1383,6 +1383,7 @@ function sydUpdatePVI(cs) {
 
   // ── 1. Current Vitals ────────────────────────────────────────────────────
   const v = cs.current_vitals;
+  const nv = cs.new_vitals; // separate object with only new/changed vitals since last encounter (if supported by API)
   if (v) {
     const rows = [
       { label:'Blood Pressure', val: v.blood_pressure?.display,  unit: v.blood_pressure?.unit  || 'mmHg', flag: v.blood_pressure?.flag  },

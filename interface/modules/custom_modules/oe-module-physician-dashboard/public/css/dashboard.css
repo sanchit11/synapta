@@ -2388,6 +2388,11 @@ body {
 	border: 1px solid rgba(83, 74, 183, .2);
 	border-radius: 12px;
 	padding: 12px;
+	/* Fixed-height PVI block with internal scroll */
+	display: flex;
+	flex-direction: column;
+	max-height: 480px;
+	overflow: hidden;
 }
 
 .syd-aip-section-title,
@@ -2398,6 +2403,7 @@ body {
 	text-transform: uppercase;
 	color: var(--purple);
 	margin-bottom: 8px;
+	flex-shrink: 0; /* stays pinned at top when PVI content scrolls */
 }
 
 .syd-intel-item,
@@ -4710,4 +4716,674 @@ border-top: 1px solid var(--border);
 .syd-slider-dot.active {
     background: var(--syd-teal, #14b8a6);
     transform: scale(1.3);
+}
+
+/* ── Vitals Trend DB Comparison Card ──────────────────────────────── */
+.syd-pvi-vt-card {
+    background: #fff;
+    border: 1px solid #b8d4f5;
+    border-radius: 7px;
+    overflow: hidden;
+    margin-bottom: 10px;
+    font-size: 12px;
+}
+.syd-pvi-vt-title {
+    background: linear-gradient(135deg, #e8f4fd, #dceeff);
+    padding: 7px 11px;
+    font-weight: 700;
+    font-size: 12px;
+    color: #1a5fa8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.syd-pvi-vt-sub {
+    font-weight: 400;
+    font-size: 10px;
+    color: #4a7fb5;
+}
+.syd-pvi-vt-table {
+    width: 100%;
+}
+.syd-pvi-vt-row {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr 1fr 56px;
+    align-items: center;
+    padding: 4px 10px;
+    border-bottom: 1px solid #f1f3f5;
+    font-size: 11.5px;
+    gap: 4px;
+}
+.syd-pvi-vt-row:last-child { border-bottom: none; }
+.syd-pvi-vt-hdr {
+    background: #f8f9fa;
+    font-weight: 700;
+    font-size: 10px;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+.syd-pvi-vt-row.syd-pvi-vt-alert {
+    background: #fff5f5;
+}
+.syd-pvi-vt-prev { color: #6c757d; }
+.syd-pvi-vt-lat  { font-weight: 600; color: #212529; }
+.syd-pvi-vt-warn { color: #a32d2d; font-weight: 700; }
+.syd-pvi-vt-delta {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex-wrap: nowrap;
+}
+.syd-pvi-vt-chip {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: #e9ecef;
+    color: #495057;
+    white-space: nowrap;
+}
+.syd-pvi-vt-chip-up   { background: #f8d7da; color: #721c24; }
+.syd-pvi-vt-chip-down { background: #d4edda; color: #155724; }
+.syd-pvi-vt-chip-same { background: #e9ecef; color: #6c757d; }
+.syd-pvi-vt-arrow { font-size: 11px; font-weight: 700; }
+.syd-pvi-vt-up   { color: #a32d2d; }
+.syd-pvi-vt-down { color: #1a6f3b; }
+.syd-pvi-vt-same { color: #6c757d; }
+
+/* ── PVI scrollbar ─────────────────────────────────────────────────────────── */
+#syd-pvi-content {
+    flex: 1;          /* fill remaining height inside .ai-pv flex column */
+    min-height: 0;    /* required for flex child to shrink below content size */
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(83,74,183,.3) transparent;
+    padding-right: 4px;
+}
+#syd-pvi-content::-webkit-scrollbar       { width: 5px; }
+#syd-pvi-content::-webkit-scrollbar-track { background: transparent; }
+#syd-pvi-content::-webkit-scrollbar-thumb { background: rgba(83,74,183,.3); border-radius: 3px; }
+#syd-pvi-content::-webkit-scrollbar-thumb:hover { background: rgba(83,74,183,.6); }
+
+/* ── AI Vitals Trend Card ──────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════
+   AI Vitals Trend Analysis Card
+═══════════════════════════════════════════════════ */
+.syd-vtai-card {
+    background: #fff;
+    border: 1px solid #dce6f4;
+    border-radius: 10px;
+    overflow: hidden;
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+/* ── Header ── */
+.syd-vtai-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    background: linear-gradient(135deg, #1a3a5c 0%, #2056a0 100%);
+}
+.syd-vtai-header-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.syd-vtai-header-icon { font-size: 14px; }
+.syd-vtai-title {
+    font-weight: 700;
+    font-size: 12px;
+    color: #fff;
+    letter-spacing: 0.2px;
+}
+.syd-vtai-badge {
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 10.5px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.syd-vtai-ok       { background: #c6f0d3; color: #155724; }
+.syd-vtai-stable   { background: #d0e8ff; color: #0d3b7a; }
+.syd-vtai-warn     { background: #fff2cc; color: #7a5700; }
+.syd-vtai-concern  { background: #ffe5cc; color: #7a3300; }
+.syd-vtai-critical { background: #ffd6d6; color: #7a0000; }
+
+/* ── Clinical Interpretation callout ── */
+.syd-vtai-interp {
+    display: flex;
+    gap: 0;
+    background: #fffbef;
+    border-bottom: 1px solid #f0e6c0;
+}
+.syd-vtai-interp-bar {
+    width: 4px;
+    flex-shrink: 0;
+    background: #e67e22;
+    border-radius: 0;
+}
+.syd-vtai-interp-body {
+    padding: 10px 12px;
+    flex: 1;
+}
+.syd-vtai-interp-label {
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #b7770d;
+    margin-bottom: 4px;
+}
+.syd-vtai-interp-text {
+    font-size: 12px;
+    font-weight: 700;
+    color: #4a3000;
+    line-height: 1.6;
+}
+
+/* ── Section label ── */
+.syd-vtai-section-label {
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #8a9ab5;
+    margin-bottom: 6px;
+}
+
+/* ── Vitals table ── */
+.syd-vtai-tbl-wrap {
+    padding: 10px 12px 6px;
+    border-bottom: 1px solid #e8eff8;
+}
+.syd-vtai-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11.5px;
+}
+.syd-vtai-th {
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #8a9ab5;
+    padding: 4px 6px;
+    text-align: right;
+    border-bottom: 2px solid #e8eff8;
+    white-space: nowrap;
+}
+.syd-vtai-th-vital { text-align: left; padding-left: 8px; }
+.syd-vtai-th-pct   { color: #aab5c8; }
+
+.syd-vtai-tr:hover { background: #f7faff; }
+
+.syd-vtai-td {
+    padding: 6px 6px;
+    text-align: right;
+    color: #2c3e50;
+    vertical-align: middle;
+}
+.syd-vtai-td-vital {
+    text-align: left;
+    font-weight: 700;
+    font-size: 11.5px;
+    padding-left: 8px;
+    white-space: nowrap;
+    /* border-left set inline per vital */
+}
+.syd-vtai-td-num  { font-variant-numeric: tabular-nums; }
+.syd-vtai-td-latest { font-weight: 700; }
+.syd-vtai-td-pct    { color: #8a9ab5; font-size: 11px; }
+
+/* Change column colours */
+.syd-vtai-chg-up      { color: #c0392b; font-weight: 700; }
+.syd-vtai-chg-down    { color: #1e8449; font-weight: 700; }
+.syd-vtai-chg-neutral { color: #7f8c8d; }
+
+/* Significance note row */
+.syd-vtai-sig-row {}
+.syd-vtai-sig-td {
+    font-size: 10.5px;
+    color: #5a7a9a;
+    font-style: italic;
+    padding: 2px 8px 7px 10px;
+    line-height: 1.45;
+    /* border-left set inline */
+}
+.syd-vtai-sig-icon {
+    font-style: normal;
+    margin-right: 3px;
+    color: #aab5c8;
+}
+
+/* ── Recommendations ── */
+.syd-vtai-rec {
+    padding: 10px 12px 12px;
+    background: #f8fafd;
+}
+.syd-vtai-rec-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+.syd-vtai-urg {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 10.5px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.syd-vtai-urg-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.syd-vtai-urg-r { background: #eafaf1; color: #1a5c2e; }
+.syd-vtai-urg-w { background: #ebf5fb; color: #0d3b7a; }
+.syd-vtai-urg-p { background: #fef9e7; color: #7a5700; }
+.syd-vtai-urg-u { background: #fdf2e9; color: #7a3300; }
+.syd-vtai-urg-e { background: #fdedec; color: #7a0000; animation: syd-pulse 1.2s infinite; }
+
+/* Action items */
+.syd-vtai-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.syd-vtai-action-item {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    line-height: 1.5;
+}
+.syd-vtai-action-num {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #2056a0;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+}
+.syd-vtai-action-text {
+    font-size: 11.5px;
+    color: #2c3e50;
+}
+
+/* Follow-up */
+.syd-vtai-followup {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 9px;
+    padding-top: 8px;
+    border-top: 1px dashed #dce6f4;
+    font-size: 11.5px;
+    color: #2c3e50;
+}
+
+/* ── Loading notice — top of PVI, nothing else shown ─────────────────────── */
+.syd-vtai-loading-notice {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 14px;
+    background: #f7faff;
+    border: 1px solid #dce6f4;
+    border-radius: 8px;
+    margin-bottom: 6px;
+}
+
+.syd-vtai-ln-spinner {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border: 2.5px solid rgba(26, 58, 92, 0.15);
+    border-top-color: #1a3a5c;
+    border-radius: 50%;
+    animation: syd-spin 0.85s linear infinite;
+}
+
+.syd-vtai-ln-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.syd-vtai-ln-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1a3a5c;
+    line-height: 1.3;
+}
+
+.syd-vtai-ln-sub {
+    font-size: 11px;
+    color: #5a7a9a;
+    line-height: 1.4;
+}
+
+/* ═══════════════════════════════════════════════════
+   Chief Complaints Section
+═══════════════════════════════════════════════════ */
+.syd-cc-section {
+    background: linear-gradient(160deg, #fef6fb 0%, #f0eaff 100%);
+    border: 1px solid #e0d0f5 !important;
+}
+
+.syd-cc-section .syd-aip-section-title {
+    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+    color: #fff;
+    border-radius: 8px 8px 0 0;
+    padding: 8px 12px;
+}
+
+.syd-cc-section .syd-aip-section-title span:first-child {
+    color: #fff;
+    font-weight: 700;
+}
+
+.syd-cc-section .syd-aip-count {
+    background: rgba(255,255,255,0.25);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.35);
+}
+
+.syd-cc-body {
+    padding: 8px 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.syd-cc-empty {
+    font-size: 11.5px;
+    color: #8a9ab5;
+    text-align: center;
+    padding: 12px 0;
+    font-style: italic;
+}
+
+/* Individual complaint card */
+.syd-cc-card {
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid #ddd0f8;
+    border-radius: 8px;
+    padding: 9px 11px;
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(4px);
+}
+
+.syd-cc-card-latest {
+    background: rgba(255, 255, 255, 0.92);
+    border-color: #c4a8f0;
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.1);
+}
+
+/* Accent strip on the left */
+.syd-cc-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 3px;
+    background: #b0bec5;
+    border-radius: 8px 0 0 8px;
+}
+.syd-cc-card-latest::before {
+    background: linear-gradient(180deg, #e74c3c, #c0392b);
+}
+
+/* Header row: badge + date */
+.syd-cc-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.syd-cc-badge-latest {
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: #fde8e8;
+    color: #c0392b;
+    padding: 2px 7px;
+    border-radius: 20px;
+    flex-shrink: 0;
+}
+
+.syd-cc-badge-prev {
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: #eaf0fb;
+    color: #3a5a9a;
+    padding: 2px 7px;
+    border-radius: 20px;
+    flex-shrink: 0;
+}
+
+.syd-cc-date {
+    font-size: 10.5px;
+    color: #8a9ab5;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+/* Main complaint text — prominent */
+.syd-cc-text {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #1a2e45;
+    line-height: 1.55;
+    margin-bottom: 0;
+}
+.syd-cc-card-latest .syd-cc-text {
+    color: #1a2e45;
+}
+
+/* Optional metadata rows */
+.syd-cc-meta {
+    margin-top: 7px;
+    padding-top: 7px;
+    border-top: 1px dashed #d8c8f5;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.syd-cc-meta-row {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    font-size: 11px;
+}
+
+.syd-cc-meta-icon {
+    font-size: 11px;
+    flex-shrink: 0;
+    width: 14px;
+}
+
+.syd-cc-meta-label {
+    font-weight: 700;
+    color: #5a7a9a;
+    flex-shrink: 0;
+    min-width: 60px;
+}
+
+.syd-cc-meta-val {
+    color: #2c3e50;
+    line-height: 1.4;
+}
+
+/* ═══════════════════════════════════════════════════
+   Negative Lab Results Section
+═══════════════════════════════════════════════════ */
+.syd-lab-section {
+    background: linear-gradient(160deg, #fff5f5 0%, #ffeaea 100%);
+    border: 1px solid #f5c6c6 !important;
+}
+
+.syd-lab-section .syd-aip-section-title {
+    background: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%);
+    color: #fff;
+    border-radius: 8px 8px 0 0;
+    padding: 8px 12px;
+}
+
+.syd-lab-section .syd-aip-section-title span:first-child {
+    color: #fff;
+    font-weight: 700;
+}
+
+.syd-lab-section .syd-aip-count {
+    background: rgba(255,255,255,0.25);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.35);
+}
+
+.syd-lab-body {
+    padding: 8px 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.syd-lab-empty {
+    font-size: 11.5px;
+    color: #8a9ab5;
+    text-align: center;
+    padding: 12px 0;
+    font-style: italic;
+}
+
+/* Lab result card */
+.syd-lab-card {
+    background: rgba(255,255,255,0.82);
+    border-radius: 8px;
+    padding: 9px 11px;
+    position: relative;
+    overflow: hidden;
+    border-left: 4px solid #e53e3e;
+    border-top: 1px solid #fcd0d0;
+    border-right: 1px solid #fcd0d0;
+    border-bottom: 1px solid #fcd0d0;
+}
+.syd-lab-card.syd-lab-high {
+    border-left-color: #e53e3e;
+    background: rgba(255, 248, 248, 0.9);
+}
+.syd-lab-card.syd-lab-low {
+    border-left-color: #2563eb;
+    background: rgba(248, 250, 255, 0.9);
+    border-top-color: #c3d9ff;
+    border-right-color: #c3d9ff;
+    border-bottom-color: #c3d9ff;
+}
+.syd-lab-card.syd-lab-abn {
+    border-left-color: #d97706;
+    background: rgba(255, 252, 245, 0.9);
+    border-top-color: #fde8b0;
+    border-right-color: #fde8b0;
+    border-bottom-color: #fde8b0;
+}
+
+/* Header row */
+.syd-lab-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 5px;
+}
+.syd-lab-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1a2e45;
+    line-height: 1.4;
+    flex: 1;
+}
+.syd-lab-date {
+    font-size: 10px;
+    color: #8a9ab5;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+/* Result value + badge row */
+.syd-lab-result-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+.syd-lab-result-val {
+    font-size: 15px;
+    font-weight: 800;
+    color: #1a2e45;
+    line-height: 1;
+}
+.syd-lab-unit {
+    font-size: 11px;
+    font-weight: 500;
+    color: #5a7a9a;
+    margin-left: 3px;
+}
+
+/* Abnormal badge */
+.syd-lab-badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.syd-lab-badge.syd-lab-high { background: #fee2e2; color: #b91c1c; }
+.syd-lab-badge.syd-lab-low  { background: #dbeafe; color: #1d4ed8; }
+.syd-lab-badge.syd-lab-abn  { background: #fef3c7; color: #92400e; }
+
+/* Reference range */
+.syd-lab-range {
+    font-size: 10.5px;
+    color: #5a7a9a;
+    margin-top: 3px;
+}
+.syd-lab-range-lbl {
+    font-weight: 700;
+    color: #8a9ab5;
+    margin-right: 3px;
+}
+
+/* Lab comments */
+.syd-lab-comment {
+    margin-top: 5px;
+    padding-top: 5px;
+    border-top: 1px dashed #f5c6c6;
+    font-size: 10.5px;
+    color: #5a7a9a;
+    font-style: italic;
+    line-height: 1.4;
 }
