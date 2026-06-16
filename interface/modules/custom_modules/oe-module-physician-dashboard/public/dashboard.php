@@ -3055,8 +3055,8 @@ function formatValues($value, $decimals = 1)
             <div class="syd-aip-body" id="syd-aip-body">
 
                 <!-- ── SECTION 1: Pre-visit Intelligence ── -->
-                <div class="syd-aip-section ai-pv fade">
-                    <div class="syd-aip-section-title ai-lbl">
+                <div class="syd-aip-section ai-pv fade " style="min-height:400px";>
+                    <div class="syd-aip-section-title ai-lbl" ">
                         <span>⚡ Pre-Visit Intelligence</span>
                         <button class="syd-aip-refresh" onclick="sydRefreshIntelligence()"
                             title="Refresh AI analysis">↻</button>
