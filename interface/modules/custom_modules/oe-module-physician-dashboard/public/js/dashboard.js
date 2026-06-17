@@ -3,6 +3,35 @@
 // Matches original synapta_provider_dashboard_V7 behaviour
 // ═══════════════════════════════════════════════════════
 
+(function injectVitalsTrendStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    .syd-vtai-card {
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .syd-vtai-tbl-wrap {
+      display: block;
+      overflow-x: auto;
+      min-width: 0;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .syd-vtai-tbl {
+      width: max-content;
+      min-width: 100%;
+      border-collapse: collapse;
+    }
+
+    #syd-ai-panel {
+      min-width: 0;
+      overflow-x: hidden;
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
 // ── Global state ──────────────────────────────────────
   // Inject Hourglass Styles dynamically into the document head
 (function injectHourglassStyles() {
@@ -2095,24 +2124,39 @@ function sydBuildVtaiCardHtml(data) {
     <span class="syd-vtai-badge ${sMeta.cls}">${sMeta.icon} ${esc(sMeta.label)}</span>
   </div>`;
 
-  // ── Clinical Interpretation callout ──────────────────────────────────────
-  if (ca.overall_interpretation) {
+  // ── Clinical Interpretation callout (expandable) ────────────────────────
+  if (ca.title && ca.overall_interpretation) {
+    const interpId = 'syd-vtai-interp-' + Math.random().toString(36).slice(2, 8);
     h += `<div class="syd-vtai-interp">
       <div class="syd-vtai-interp-bar"></div>
       <div class="syd-vtai-interp-body">
-        <div class="syd-vtai-interp-label">Clinical Interpretation</div>
-        <div class="syd-vtai-interp-text">${esc(ca.overall_interpretation)}</div>
+        <div class="syd-vtai-interp-toggle"
+             onclick="(function(btn){
+               var body = document.getElementById('${interpId}');
+               var arrow = btn.querySelector('.syd-vtai-interp-arrow');
+               if (!body) return;
+               var expanded = body.style.display !== 'none';
+               body.style.display = expanded ? 'none' : 'block';
+               if (arrow) arrow.textContent = expanded ? '▶' : '▼';
+             })(this)"
+             style="cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none;">
+          <span class="syd-vtai-interp-label" style="flex:1;">${esc(ca.title)}</span>
+          <span class="syd-vtai-interp-arrow" style="font-size:9px;color:var(--syd-muted);">▶</span>
+        </div>
+        <div id="${interpId}" class="syd-vtai-interp-text" style="display:none;margin-top:6px;">
+          ${esc(ca.overall_interpretation)}
+        </div>
       </div>
     </div>`;
   }
 
   // ── Vitals Table ─────────────────────────────────────────────────────────
   if (ca.vitals_trends && ca.vitals_trends.length) {
-    h += `<div class="syd-vtai-tbl-wrap">
+    h += `<div class="syd-vtai-tbl-wrap" style="overflow-x:auto;width:100%">;
       <div class="syd-vtai-section-label">Vitals Trend</div>
-      <table class="syd-vtai-tbl">
-        <thead>
-          <tr>
+      <table class="syd-vtai-tbl" style="width:max-content;min-width:100%;border-collapse:collapse;">
+        <thead style="overflow-x:auto;width:100%">
+          <tr style="overflow-x:auto;width:100%">
             <th class="syd-vtai-th syd-vtai-th-vital">Vital Sign</th>
             <th class="syd-vtai-th">Previous</th>
             <th class="syd-vtai-th">Latest</th>
@@ -2120,7 +2164,7 @@ function sydBuildVtaiCardHtml(data) {
             <th class="syd-vtai-th syd-vtai-th-pct">%</th>
           </tr>
         </thead>
-        <tbody>`;
+        <tbody style="overflow-x:auto;width:100%">`;
 
     ca.vitals_trends.forEach(vtr => {
       const prev = vtr.previous_value ?? vtr.previous;
@@ -2162,7 +2206,7 @@ function sydBuildVtaiCardHtml(data) {
       // Significance tooltip
       const sig = esc(vtr.clinical_significance || '');
 
-      h += `<tr class="syd-vtai-tr" title="${sig}">
+      h += `<tr class="syd-vtai-tr" title="${sig}" style="width:100%;overflow-x:auto;" >
         <td class="syd-vtai-td syd-vtai-td-vital" style="color:${vc.color};border-left:3px solid ${vc.color};background:${vc.bg}">
           ${esc(vtr.vital_sign || '')}
         </td>

@@ -78,7 +78,7 @@ body {
 	/* sidebar width */
 	--th: 0px;
 	/* topbar height */
-	--aw: 300px;
+	--aw: 340px;
 	/* AI panel width */
 
 	/* ── Typography ── */
@@ -3693,14 +3693,14 @@ body {
 /* ── LARGE DESKTOP (1400px+) — wider AI panel ── */
 @media (min-width: 1400px) {
 	#synapta-dashboard {
-		--aw: 340px;
+		--aw: 380px;
 	}
 }
 
 /* ── TABLET LANDSCAPE (1024px – 1279px) ── */
 @media (max-width: 1279px) {
 	#synapta-dashboard {
-		--aw: 260px;
+		--aw: 300px;
 		--sw: 0px;
 	}
 
@@ -4747,16 +4747,76 @@ border-top: 1px solid var(--border);
 .syd-pvi-vt-table {
     width: 100%;
 }
+.syd-pvi-vt-hdr {
+    display: none !important;  /* header not needed in 2-line layout */
+}
 .syd-pvi-vt-row {
     display: grid;
-    grid-template-columns: 1.1fr 1fr 1fr 56px;
-    align-items: center;
-    padding: 4px 10px;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    grid-template-areas:
+        "name  delta"
+        "prev  latest";
+    padding: 6px 10px;
     border-bottom: 1px solid #f1f3f5;
     font-size: 11.5px;
-    gap: 4px;
+    gap: 1px 8px;
+    align-items: center;
 }
 .syd-pvi-vt-row:last-child { border-bottom: none; }
+/* line 1 left: vital name */
+.syd-pvi-vt-row > span:first-child {
+    grid-area: name;
+    font-weight: 600;
+    color: #212529;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+/* line 1 right: change chip + arrow */
+.syd-pvi-vt-delta {
+    grid-area: delta;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    justify-content: flex-end;
+    white-space: nowrap;
+}
+/* line 2 left: previous value */
+.syd-pvi-vt-prev {
+    grid-area: prev;
+    font-size: 10.5px;
+    color: #6c757d;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+.syd-pvi-vt-prev::before {
+    content: "Prev: ";
+    font-size: 9.5px;
+    color: #9aa3ac;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+}
+/* line 2 right: latest value */
+.syd-pvi-vt-lat {
+    grid-area: latest;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #212529;
+    text-align: right;
+    white-space: nowrap;
+}
+.syd-pvi-vt-lat::before {
+    content: "Now: ";
+    font-size: 9.5px;
+    color: #9aa3ac;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+}
 .syd-pvi-vt-hdr {
     background: #f8f9fa;
     font-weight: 700;
