@@ -2152,16 +2152,17 @@ function sydBuildVtaiCardHtml(data) {
 
   // ── Vitals Table ─────────────────────────────────────────────────────────
   if (ca.vitals_trends && ca.vitals_trends.length) {
-    h += `<div class="syd-vtai-tbl-wrap" style="overflow-x:auto;width:100%">;
+    h += `<div class="syd-vtai-tbl-wrap" style="overflow-x:auto;">;
       <div class="syd-vtai-section-label">Vitals Trend</div>
-      <table class="syd-vtai-tbl" style="width:max-content;min-width:100%;border-collapse:collapse;">
-        <thead style="overflow-x:auto;width:100%">
-          <tr style="overflow-x:auto;width:100%">
+      <table class="syd-vtai-tbl" style="width:250px;overflow-x:auto;">
+        <thead style="overflow-x:auto;">
+          <tr style="overflow-x:auto;">
             <th class="syd-vtai-th syd-vtai-th-vital">Vital Sign</th>
             <th class="syd-vtai-th">Previous</th>
             <th class="syd-vtai-th">Latest</th>
             <th class="syd-vtai-th">Change</th>
             <th class="syd-vtai-th syd-vtai-th-pct">%</th>
+            <th class="syd-vtai-th">Conclusion</th>
           </tr>
         </thead>
         <tbody style="overflow-x:auto;width:100%">`;
@@ -2206,6 +2207,28 @@ function sydBuildVtaiCardHtml(data) {
       // Significance tooltip
       const sig = esc(vtr.clinical_significance || '');
 
+      // Conclusion badge styling
+      const conclusionMap = {
+        'Normal':       { bg: '#1b8a4c', color: '#ffffff', shadow: 'rgba(27,138,76,.35)' },
+        'Elevated':     { bg: '#e07b00', color: '#ffffff', shadow: 'rgba(224,123,0,.35)' },
+        'Stage 1 HTN':  { bg: '#d95c00', color: '#ffffff', shadow: 'rgba(217,92,0,.35)' },
+        'Stage 2 HTN':  { bg: '#c0392b', color: '#ffffff', shadow: 'rgba(192,57,43,.35)' },
+        'Tachycardia':  { bg: '#8e24aa', color: '#ffffff', shadow: 'rgba(142,36,170,.35)' },
+        'Fever':        { bg: '#f57c00', color: '#ffffff', shadow: 'rgba(245,124,0,.35)' },
+        'Critical':     { bg: '#b71c1c', color: '#ffffff', shadow: 'rgba(183,28,28,.45)' },
+      };
+      const conclusion    = vtr.conclusion || '';
+      const cStyle        = conclusionMap[conclusion]
+        || { bg: '#6b7280', color: '#ffffff', shadow: 'rgba(107,114,128,.3)' };
+      const conclusionHtml = conclusion
+        ? `<span style="display:inline-block;padding:3px 9px;border-radius:12px;font-size:10px;
+                        font-weight:700;background:${cStyle.bg};color:${cStyle.color};
+                        box-shadow:0 2px 6px ${cStyle.shadow};white-space:nowrap;
+                        letter-spacing:.3px;">
+             ${esc(conclusion)}
+           </span>`
+        : '—';
+
       h += `<tr class="syd-vtai-tr" title="${sig}" style="width:100%;overflow-x:auto;" >
         <td class="syd-vtai-td syd-vtai-td-vital" style="color:${vc.color};border-left:3px solid ${vc.color};background:${vc.bg}">
           ${esc(vtr.vital_sign || '')}
@@ -2214,12 +2237,13 @@ function sydBuildVtaiCardHtml(data) {
         <td class="syd-vtai-td syd-vtai-td-num syd-vtai-td-latest" style="color:${vc.color}">${esc(fmt(lat))}</td>
         <td class="syd-vtai-td syd-vtai-td-num"><span class="${deltaCls}">${esc(deltaTxt)}${arrow}</span></td>
         <td class="syd-vtai-td syd-vtai-td-num syd-vtai-td-pct">${esc(pctTxt)}</td>
+        <td class="syd-vtai-td" style="text-align:center;">${conclusionHtml}</td>
       </tr>`;
 
       // Significance note row — only if non-trivial
       if (sig && !sig.match(/^stable\s/i)) {
         h += `<tr class="syd-vtai-sig-row">
-          <td colspan="5" class="syd-vtai-sig-td" style="border-left:3px solid ${vc.color}">
+          <td colspan="6" class="syd-vtai-sig-td" style="border-left:3px solid ${vc.color}">
             <span class="syd-vtai-sig-icon">ℹ</span> ${sig}
           </td>
         </tr>`;
