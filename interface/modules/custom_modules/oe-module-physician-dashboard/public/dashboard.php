@@ -1919,73 +1919,38 @@ function formatValues($value, $decimals = 1)
                 <div class="syd-tab-inner syd-summary-inner">
 
 
-                    <div class="risk-banner fade">
+                    <!-- ── AI Risk Stratification Banner (populated async) ── -->
+                    <div class="risk-banner fade" id="syd-ai-summary-banner">
 
                         <div style="font-size:22px;flex-shrink:0;margin-top:2px;">⚡</div>
 
                         <div style="flex:1;">
 
                             <!-- Top Row -->
-                            <div style="
-        display:flex;
-        align-items:center;
-        justify-content:space-between;
-        gap:12px;
-        flex-wrap:wrap;
-        margin-bottom:6px;
-    ">
-
-                                <!-- Title -->
-                                <div style="
-          font-size:9.5px;
-          font-weight:700;
-          text-transform:uppercase;
-          letter-spacing:1.2px;
-          color:#AFA9EC;
-      ">
+                            <div style="display:flex;align-items:center;justify-content:space-between;
+                                        gap:12px;flex-wrap:wrap;margin-bottom:6px;">
+                                <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;
+                                            letter-spacing:1.2px;color:#AFA9EC;">
                                     Synapta Scribe · AI Risk Stratification
                                 </div>
-
-                                <!-- Disclaimer Badge -->
-                                <span style="
-          background:rgba(255,255,255,0.12);
-          border:1px solid rgba(255,255,255,0.18);
-          color:#FFD6D6;
-          padding:4px 10px;
-          border-radius:999px;
-          font-size:9px;
-          font-weight:500;
-          letter-spacing:.4px;
-          white-space:nowrap;
-          backdrop-filter:blur(4px);
-          cursor:pointer;
-      ">
+                                <span id="syd-summary-badge" style="background:rgba(255,255,255,0.12);
+                                    border:1px solid rgba(255,255,255,0.18);color:#FFD6D6;
+                                    padding:4px 10px;border-radius:999px;font-size:9px;font-weight:500;
+                                    letter-spacing:.4px;white-space:nowrap;backdrop-filter:blur(4px);">
                                     AI-Assisted Risk Indicator · Requires Clinical Review
                                 </span>
-
                             </div>
 
-                            <!-- Main Text -->
-                            <div style="
-        font-size:11.5px;
-        font-weight:600;
-        color:#fff;
-        line-height:1.6;
-    ">
-
-                                This patient has
-                                <span style="color:#F4B0B0;">
-                                    3 uncontrolled cardiovascular risk factors
+                            <!-- Main Text — filled by JS -->
+                            <div id="syd-summary-narrative" style="font-size:11.5px;font-weight:600;
+                                color:#fff;line-height:1.6;">
+                                <span style="opacity:.6;font-weight:500;font-size:11px;">
+                                    🤖 Generating AI risk stratification…
                                 </span>
-                                (hypertension, type 2 diabetes, hyperlipidemia),
-                                a
-                                <span style="color:#F4B0B0;">
-                                    strong family history of MI
-                                </span>,
-                                and presents today with chest pain — ACS must be ruled out before this visit concludes.
-                                Two preventive screenings (mammogram, colonoscopy) are also overdue.
-
                             </div>
+
+                            <!-- Priority Actions — filled by JS -->
+                            <div id="syd-summary-actions" style="margin-top:10px;"></div>
 
                         </div>
 

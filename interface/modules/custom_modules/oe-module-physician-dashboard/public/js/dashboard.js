@@ -764,21 +764,25 @@ function sydSwitchTab(tabKey, el) {
   }
   if (el) el.classList.add('active');
 
-  // Animate risk meter on summary tab
+  // Animate risk meter on summary tab + trigger AI summary (once)
   if (tabKey === 'summary') {
     setTimeout(() => {
       const fill = document.querySelector('.syd-risk-meter-fill');
-      if (!fill) return;
-      const target = fill.style.width;
-      fill.style.width    = '0%';
-      fill.style.transition = 'none';
-      requestAnimationFrame(() => {
+      if (fill) {
+        const target = fill.style.width;
+        fill.style.width      = '0%';
+        fill.style.transition = 'none';
         requestAnimationFrame(() => {
-          fill.style.transition = 'width .8s ease';
-          fill.style.width = target;
+          requestAnimationFrame(() => {
+            fill.style.transition = 'width .8s ease';
+            fill.style.width = target;
+          });
         });
-      });
+      }
     }, 100);
+
+    // Load AI summary on every tab visit (fresh call each time)
+    sydLoadAISummary();
   }
 }
 
@@ -2005,6 +2009,203 @@ function sydShowToast(msg, bg = '#1D9E75', ms = 2800) {
   t.style.background = bg;
   t.style.opacity    = '1';
   _toastTimer = setTimeout(() => { t.style.opacity = '0'; }, ms);
+}
+
+// ═══════════════════════════════════════════════════════
+//  AI SUMMARY — async loader for Summary tab banner
+// ═══════════════════════════════════════════════════════
+function sydLoadAISummary() {
+  if (typeof SYD === 'undefined' || !SYD.pid) return;
+
+  const narrative = document.getElementById('syd-summary-narrative');
+  const actions   = document.getElementById('syd-summary-actions');
+  const badge     = document.getElementById('syd-summary-badge');
+  if (!narrative) return;
+
+  // Reset to loading state on every call
+  narrative.style.cssText = 'font-size:11px;font-weight:500;color:rgba(255,255,255,.6);line-height:1.6;';
+  narrative.innerHTML = `<span style="display:inline-flex;align-items:center;gap:8px;">
+    <span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.2);
+      border-top-color:rgba(255,255,255,.7);border-radius:50%;
+      animation:sydSpin .7s linear infinite;"></span>
+    Generating AI risk stratification…
+  </span>`;
+  if (actions) actions.innerHTML = '';
+  if (badge) {
+    badge.style.cssText = 'background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,.5);padding:4px 10px;border-radius:999px;font-size:9px;font-weight:500;letter-spacing:.4px;white-space:nowrap;';
+    badge.textContent = 'AI-Assisted Risk Indicator · Requires Clinical Review';
+  }
+
+  const fd = new FormData();
+  fd.append('action',    'summary');
+  fd.append('pid',       SYD.pid);
+  fd.append('encounter', SYD.encounter || 0);
+  fd.append('csrf',      SYD.csrf);
+
+  const ajaxUrl = (SYD.webroot || '') +
+    '/interface/modules/custom_modules/oe-module-physician-dashboard/public/ajax.php';
+
+  fetch(ajaxUrl, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(resp => {
+
+      // ── API not yet live / validation error ───────────────────────────
+      if (resp.unavailable) {
+        // Log full 422 detail to console for debugging
+        if (resp.debug_422) {
+          console.warn('[Synapta] FastAPI 422 detail:', JSON.stringify(resp.debug_422, null, 2));
+          console.warn('[Synapta] Payload sent:', JSON.stringify(resp.payload_sent, null, 2));
+        }
+        narrative.innerHTML = `
+          <span style="opacity:.55;font-weight:500;font-size:11px;">
+            🔧 ${resp.message || 'AI Summary API is not yet available'}
+          </span>`;
+        if (resp.debug_422) {
+          // Show field-level errors in UI for easy debugging
+          const errs = (resp.debug_422.detail || [])
+            .map(e => `<li><b>${e.loc ? e.loc.join('.') : '?'}</b>: ${e.msg}</li>`)
+            .join('');
+          narrative.innerHTML += errs
+            ? `<ul style="font-size:10px;opacity:.7;margin-top:4px;padding-left:14px;">${errs}</ul>`
+            : '';
+        }
+        if (badge) badge.textContent = 'Service Unavailable';
+        return;
+      }
+
+      if (!resp.success || !resp.data) {
+        narrative.innerHTML = `<span style="opacity:.55;font-size:11px;">
+          ⚠ Could not load AI summary.</span>`;
+        return;
+      }
+
+      const d = resp.data;
+
+      // ── Risk palette ───────────────────────────────────────────────────
+      const riskPalette = {
+        high:     { badge: '#FF5C5C', glow: 'rgba(255,92,92,.45)',   dot: '#FF5C5C', label: 'High Risk' },
+        critical: { badge: '#FF2D2D', glow: 'rgba(255,45,45,.55)',   dot: '#FF2D2D', label: 'Critical Risk' },
+        medium:   { badge: '#FFB020', glow: 'rgba(255,176,32,.4)',   dot: '#FFB020', label: 'Medium Risk' },
+        moderate: { badge: '#FFB020', glow: 'rgba(255,176,32,.4)',   dot: '#FFB020', label: 'Moderate Risk' },
+        low:      { badge: '#2DD4A0', glow: 'rgba(45,212,160,.4)',   dot: '#2DD4A0', label: 'Low Risk' },
+      };
+      const rp = riskPalette[d.risk_level] || riskPalette['medium'];
+
+      // ── Risk badge pill ────────────────────────────────────────────────
+      if (badge) {
+        badge.innerHTML = `
+          <span style="display:inline-block;width:7px;height:7px;border-radius:50%;
+            background:${rp.badge};box-shadow:0 0 8px ${rp.glow};
+            margin-right:6px;vertical-align:middle;flex-shrink:0;"></span>
+          <span style="font-weight:700;color:${rp.badge};">${rp.label}</span>
+          ${d.risk_score !== undefined
+            ? `<span style="color:rgba(255,255,255,.45);margin:0 5px;">·</span>
+               <span style="color:rgba(255,255,255,.75);">Score ${d.risk_score}/10</span>`
+            : ''}
+          <span style="color:rgba(255,255,255,.3);margin:0 5px;">·</span>
+          <span style="color:rgba(255,255,255,.45);font-weight:400;">AI-Assisted · Clinical Review Required</span>`;
+        badge.style.display     = 'inline-flex';
+        badge.style.alignItems  = 'center';
+        badge.style.flexWrap    = 'wrap';
+        badge.style.color       = '#ffffff';
+        badge.style.background  = 'rgba(255,255,255,0.07)';
+        badge.style.border      = '1px solid rgba(255,255,255,0.14)';
+        badge.style.padding     = '5px 12px';
+        badge.style.borderRadius = '999px';
+        badge.style.fontSize    = '9.5px';
+        badge.style.backdropFilter = 'blur(6px)';
+        badge.style.letterSpacing  = '.3px';
+      }
+
+      // ── Clinical narrative ─────────────────────────────────────────────
+      if (d.clinical_narrative) {
+        narrative.style.cssText = `font-size:12px;font-weight:500;color:rgba(255,255,255,.92);
+          line-height:1.7;letter-spacing:.1px;margin-bottom:2px;`;
+        narrative.textContent = d.clinical_narrative;
+      }
+
+      // ── Section label helper ───────────────────────────────────────────
+      const sectionLabel = (title, accentColor, mt) =>
+        `<div style="display:flex;align-items:center;gap:8px;margin-top:${mt}px;margin-bottom:8px;">
+           <span style="display:inline-block;width:3px;height:13px;border-radius:2px;
+             background:${accentColor};flex-shrink:0;"></span>
+           <span style="font-size:9px;font-weight:800;letter-spacing:1.1px;
+             text-transform:uppercase;color:#ffffff;opacity:.9;">${title}</span>
+           <span style="flex:1;height:1px;background:rgba(255,255,255,.1);"></span>
+         </div>`;
+
+      let actionsHtml = '';
+
+      // ── Risk factors ───────────────────────────────────────────────────
+      if (d.risk_factors && d.risk_factors.length) {
+        const rfMap = {
+          high:   { bg: 'rgba(255,92,92,.12)',  border: '#FF5C5C', dot: '#FF5C5C',  label: 'HIGH'   },
+          medium: { bg: 'rgba(255,176,32,.1)',  border: '#FFB020', dot: '#FFB020',  label: 'MED'    },
+          low:    { bg: 'rgba(45,212,160,.1)',  border: '#2DD4A0', dot: '#2DD4A0',  label: 'LOW'    },
+        };
+        actionsHtml += sectionLabel('Risk Factors', '#FF5C5C', 14);
+        actionsHtml += d.risk_factors.map(rf => {
+          const s = rfMap[rf.level] || rfMap['medium'];
+          return `<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:6px;
+                       background:${s.bg};border:1px solid rgba(255,255,255,.08);
+                       border-left:3px solid ${s.border};
+                       border-radius:0 8px 8px 0;padding:8px 12px;
+                       backdrop-filter:blur(4px);">
+            <span style="display:inline-flex;align-items:center;justify-content:center;
+              flex-shrink:0;width:32px;height:18px;border-radius:4px;
+              background:${s.border};font-size:8px;font-weight:800;
+              color:#fff;letter-spacing:.5px;margin-top:1px;">${s.label}</span>
+            <span style="font-size:11px;font-weight:500;color:rgba(255,255,255,.9);
+              line-height:1.5;">${rf.text}</span>
+          </div>`;
+        }).join('');
+      }
+
+      // ── Priority actions ───────────────────────────────────────────────
+      if (d.priority_actions && d.priority_actions.length) {
+        const paMap = {
+          high:   { dot: '#FF5C5C', bg: 'rgba(255,92,92,.1)',   border: 'rgba(255,92,92,.25)',   num: '#FF5C5C'  },
+          medium: { dot: '#FFB020', bg: 'rgba(255,176,32,.08)', border: 'rgba(255,176,32,.22)',  num: '#FFB020'  },
+          info:   { dot: '#7EB8FF', bg: 'rgba(126,184,255,.08)',border: 'rgba(126,184,255,.2)',  num: '#7EB8FF'  },
+        };
+        actionsHtml += sectionLabel('Priority Actions', '#7EB8FF', d.risk_factors && d.risk_factors.length ? 6 : 14);
+        actionsHtml += d.priority_actions.map((a, i) => {
+          const s = paMap[a.priority] || paMap['info'];
+          return `<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:6px;
+                       background:${s.bg};border:1px solid ${s.border};
+                       border-radius:8px;padding:8px 12px;">
+            <span style="display:inline-flex;align-items:center;justify-content:center;
+              flex-shrink:0;width:20px;height:20px;border-radius:50%;
+              background:${s.dot};font-size:10px;font-weight:800;
+              color:#fff;margin-top:0;">${i + 1}</span>
+            <span style="font-size:11px;font-weight:500;color:rgba(255,255,255,.9);
+              line-height:1.5;padding-top:2px;">${a.text}</span>
+          </div>`;
+        }).join('');
+      }
+
+      // ── Confidence footnote ────────────────────────────────────────────
+      if (d.confidence !== undefined) {
+        const pct = Math.round(d.confidence * 100);
+        actionsHtml += `<div style="margin-top:12px;display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden;">
+            <div style="width:${pct}%;height:100%;border-radius:2px;
+              background:linear-gradient(90deg,${rp.badge},${rp.badge}99);
+              transition:width .6s ease;"></div>
+          </div>
+          <span style="font-size:9px;color:rgba(255,255,255,.4);white-space:nowrap;font-weight:500;">
+            ${pct}% data confidence
+          </span>
+        </div>`;
+      }
+
+      if (actions) actions.innerHTML = actionsHtml;
+    })
+    .catch(err => {
+      console.warn('Synapta summary load error:', err);
+      if (narrative) narrative.innerHTML = `<span style="opacity:.55;font-size:11px;">
+        ⚠ AI summary unavailable — service may not be running yet.</span>`;
+    });
 }
 
 // ═══════════════════════════════════════════════════════

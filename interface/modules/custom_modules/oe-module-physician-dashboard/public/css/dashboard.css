@@ -328,6 +328,10 @@ body {
 	display: inline-block;
 }
 
+@keyframes sydSpin {
+	to { transform: rotate(360deg); }
+}
+
 @keyframes syd-blink {
 
 	0%,

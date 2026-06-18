@@ -393,6 +393,356 @@ switch ($action) {
     echo json_encode(['success' => true, 'data' => $vtDec]);
     break;
 
+  // ════════════════════════════════════════════════════════════════════════
+  //  AI Summary / Risk Stratification  →  localhost:8000/summary
+  // ════════════════════════════════════════════════════════════════════════
+  case 'summary':
+    set_time_limit(120);
+
+    // ── 1. Patient demographics ───────────────────────────────────────────
+    $pt = sqlQuery(
+        "SELECT fname, lname, DOB, sex, race, ethnicity, occupation
+         FROM   patient_data WHERE pid = ?",
+        [$pid]
+    );
+    $age = $pt['DOB']
+        ? (int) date_diff(date_create($pt['DOB']), date_create('today'))->y
+        : 0;
+
+    // ── 2. Current encounter reason + chief complaints ────────────────────
+    $enc_row = sqlQuery(
+        "SELECT date, reason FROM form_encounter WHERE encounter = ? AND pid = ?",
+        [$enc, $pid]
+    );
+    $ccRows = [];
+    $ccStmt = sqlStatement(
+        "SELECT complaint_text, severity, duration, associated_symptoms, date_created
+         FROM   patient_chief_complaint WHERE pid = ? ORDER BY date_created DESC LIMIT 3",
+        [$pid]
+    );
+    while ($r = sqlFetchArray($ccStmt)) { $ccRows[] = $r; }
+
+    // ── Helper: clean decimal(12,6) MySQL values → clean strings ─────────
+    // FastAPI _PSVitalsReading expects Optional[str] for all vital fields.
+    // MySQL decimal(12,6) returns "88.000000" — strip trailing zeros.
+    $cleanVitals = function($row) {
+        if (!$row) return null;
+        foreach (['pulse','temperature','respiration','oxygen_saturation',
+                  'weight','height','BMI'] as $f) {
+            if (isset($row[$f]) && $row[$f] !== '' && $row[$f] !== null) {
+                $v = (float)$row[$f];
+                // Format to max 2 decimals, strip trailing zeros
+                $row[$f] = $v > 0 ? rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.') : null;
+            } else {
+                $row[$f] = null;
+            }
+        }
+        foreach (['bps','bpd'] as $f) {
+            $row[$f] = (isset($row[$f]) && $row[$f] !== '') ? (string)$row[$f] : null;
+        }
+        return $row;
+    };
+
+    // ── 3. Vitals — latest + last 3 ──────────────────────────────────────
+    $vLatest = sqlQuery(
+        "SELECT bps, bpd, pulse, temperature, respiration,
+                oxygen_saturation, weight, height, BMI, date
+         FROM   form_vitals WHERE pid = ? AND activity = 1
+         ORDER  BY date DESC LIMIT 1",
+        [$pid]
+    );
+    $vLatest = $cleanVitals($vLatest);
+
+    $vHistory = [];
+    $vhStmt = sqlStatement(
+        "SELECT bps, bpd, pulse, temperature, respiration,
+                oxygen_saturation, weight, height, BMI, date
+         FROM   form_vitals WHERE pid = ? AND activity = 1
+         ORDER  BY date DESC LIMIT 3",
+        [$pid]
+    );
+    while ($r = sqlFetchArray($vhStmt)) { $vHistory[] = $cleanVitals($r); }
+
+    // ── 4. Active problems ────────────────────────────────────────────────
+    $problems = [];
+    $pStmt = sqlStatement(
+        "SELECT title, diagnosis, begdate
+         FROM   lists WHERE pid = ? AND type = 'medical_problem' AND activity = 1
+         ORDER  BY begdate DESC",
+        [$pid]
+    );
+    while ($r = sqlFetchArray($pStmt)) { $problems[] = $r; }
+
+    // ── 5. Active medications ─────────────────────────────────────────────
+    $meds = [];
+    $mStmt = sqlStatement(
+        "SELECT drug, dosage, size, route, drug_dosage_instructions,
+                indication, start_date, rxnorm_drugcode
+         FROM   prescriptions WHERE patient_id = ? AND active = 1
+         ORDER  BY date_added DESC",
+        [$pid]
+    );
+    while ($r = sqlFetchArray($mStmt)) { $meds[] = $r; }
+
+    // ── 6. Allergies ──────────────────────────────────────────────────────
+    $allergies = [];
+    $aStmt = sqlStatement(
+        "SELECT title, severity_al, reaction FROM lists
+         WHERE  pid = ? AND type = 'allergy' AND activity = 1
+         ORDER  BY severity_al DESC",
+        [$pid]
+    );
+    while ($r = sqlFetchArray($aStmt)) { $allergies[] = $r; }
+
+    // ── 7. Recent abnormal labs ───────────────────────────────────────────
+    $abnormalLabs = [];
+    $alStmt = sqlStatement(
+        "SELECT poc.procedure_name AS test_name,
+                pr.result, pr.units, pr.range, pr.abnormal, pr.comments,
+                COALESCE(pr.date, prep.date_report, po.date_ordered) AS result_date
+         FROM   procedure_order po
+         JOIN   procedure_order_code poc ON poc.procedure_order_id = po.procedure_order_id
+         JOIN   procedure_report prep    ON prep.procedure_order_id  = po.procedure_order_id
+                                        AND prep.procedure_order_seq = poc.procedure_order_seq
+         JOIN   procedure_result pr      ON pr.procedure_report_id   = prep.procedure_report_id
+         WHERE  po.patient_id = ? AND po.activity = 1
+           AND  pr.abnormal IN ('yes','high','low') AND pr.result != ''
+         ORDER  BY result_date DESC LIMIT 8",
+        [$pid]
+    );
+    while ($r = sqlFetchArray($alStmt)) { $abnormalLabs[] = $r; }
+
+    // ── 8. Lab trends (HbA1c, LDL, eGFR, Glucose, Creatinine) ───────────
+    $labTrends = [];
+    $ltStmt = sqlStatement(
+        "SELECT poc.procedure_name AS test_name,
+                pr.result, pr.units, po.date_ordered AS date
+         FROM   procedure_result pr
+         JOIN   procedure_order_code poc ON poc.procedure_order_id = pr.procedure_report_id
+         JOIN   procedure_order po       ON po.procedure_order_id  = poc.procedure_order_id
+         WHERE  po.patient_id = ?
+           AND  LOWER(poc.procedure_name) REGEXP
+                'hba1c|hemoglobin a1c|ldl|egfr|glucose|cholesterol|creatinine'
+         ORDER  BY po.date_ordered DESC LIMIT 24",
+        [$pid]
+    );
+    while ($r = sqlFetchArray($ltStmt)) { $labTrends[] = $r; }
+    // Group by normalised name
+    $labTrendMap = [];
+    foreach ($labTrends as $lt) {
+        $k = strtolower($lt['test_name']);
+        if (str_contains($k, 'hba1c') || str_contains($k, 'hemoglobin a')) $k = 'HbA1c';
+        elseif (str_contains($k, 'ldl'))         $k = 'LDL';
+        elseif (str_contains($k, 'egfr'))        $k = 'eGFR';
+        elseif (str_contains($k, 'glucose'))     $k = 'Glucose';
+        elseif (str_contains($k, 'creatinine'))  $k = 'Creatinine';
+        elseif (str_contains($k, 'cholesterol')) $k = 'Cholesterol';
+        if (!isset($labTrendMap[$k])) $labTrendMap[$k] = [];
+        if (count($labTrendMap[$k]) < 6)
+            $labTrendMap[$k][] = ['value' => (float)$lt['result'], 'date' => $lt['date']];
+    }
+
+    // ── 9. Pending lab orders ─────────────────────────────────────────────
+    $pendingOrders = [];
+    $poStmt = sqlStatement(
+        "SELECT po.procedure_order_type, po.date_ordered, po.order_status,
+                poc.procedure_name AS test_name
+         FROM   procedure_order po
+         LEFT JOIN procedure_order_code poc ON poc.procedure_order_id = po.procedure_order_id
+         WHERE  po.patient_id = ? AND po.order_status IN ('pending','routed')
+         ORDER  BY po.date_ordered DESC LIMIT 8",
+        [$pid]
+    );
+    while ($r = sqlFetchArray($poStmt)) { $pendingOrders[] = $r; }
+
+    // ── 10. Family history ────────────────────────────────────────────────
+    $fhRow = sqlQuery("SELECT * FROM history_data WHERE pid = ? ORDER BY id DESC LIMIT 1", [$pid]);
+    $familyHistory = [];
+    if ($fhRow) {
+        foreach (['father','mother','siblings','spouse'] as $rel) {
+            $h = trim($fhRow["history_$rel"] ?? '');
+            $d = trim($fhRow["dc_$rel"] ?? '');
+            if ($h || $d) $familyHistory[] = ['relation' => ucfirst($rel), 'history' => $h, 'condition' => $d];
+        }
+    }
+    $relativeFlags = [];
+    $relCols = ['cancer','diabetes','high_blood_pressure','heart_problems','stroke','epilepsy','mental_illness'];
+    foreach ($relCols as $col) {
+        $val = trim($fhRow["relatives_$col"] ?? '');
+        if ($val && $val !== '0') $relativeFlags[$col] = $val;
+    }
+
+    // ── 11. Social history ────────────────────────────────────────────────
+    $socialRow = sqlQuery(
+        "SELECT tobacco_status, tobacco_amount, alcohol_status, alcohol_drinks_per_week,
+                drug_status, exercise_frequency, diet_type, occupation, social_history_notes
+         FROM   patient_social_history WHERE pid = ? ORDER BY id DESC LIMIT 1",
+        [$pid]
+    );
+
+    // ── 12. Overdue screenings from history_data ──────────────────────────
+    $screenings = [];
+    if ($fhRow) {
+        $screenCols = [
+            'last_mammogram', 'last_sigmoidoscopy_colonoscopy', 'last_ecg',
+            'last_psa', 'last_retinal', 'last_fluvax', 'last_pneuvax', 'last_ldl'
+        ];
+        foreach ($screenCols as $col) {
+            $val = trim($fhRow[$col] ?? '');
+            if ($val) $screenings[$col] = $val;
+        }
+    }
+
+    // ── 13. Immunizations ─────────────────────────────────────────────────
+    $immunizations = [];
+    $iStmt = sqlStatement(
+        "SELECT cvx_code, administered_date, note,
+                CONCAT('CVX ', cvx_code) AS vaccine_name
+         FROM   immunizations WHERE patient_id = ?
+         ORDER  BY administered_date DESC LIMIT 10",
+        [$pid]
+    );
+    while ($r = sqlFetchArray($iStmt)) { $immunizations[] = $r; }
+
+    // ── 14. Surgical history ──────────────────────────────────────────────
+    $surgicalHistory = [];
+    $sStmt = sqlStatement(
+        "SELECT title, begdate, enddate, comments FROM lists
+         WHERE  pid = ? AND type = 'surgery' ORDER BY begdate DESC",
+        [$pid]
+    );
+    while ($r = sqlFetchArray($sStmt)) { $surgicalHistory[] = $r; }
+
+    // ── 15. Last visit SOAP snapshot ──────────────────────────────────────
+    $lastVisit = sqlQuery(
+        "SELECT fe.date, fe.reason,
+                fs.subjective, fs.assessment, fs.plan,
+                CONCAT(u.fname,' ',u.lname) AS provider
+         FROM   form_encounter fe
+         LEFT JOIN forms f      ON f.encounter = fe.encounter
+                               AND f.formdir = 'soap' AND f.deleted = 0
+         LEFT JOIN form_soap fs ON fs.id = f.form_id
+         LEFT JOIN users u      ON u.id  = fe.provider_id
+         WHERE  fe.pid = ? AND fe.encounter != ?
+         ORDER  BY fe.date DESC LIMIT 1",
+        [$pid, $enc]
+    );
+
+    // ── 16. SDOH ──────────────────────────────────────────────────────────
+    $sdoh = sqlQuery(
+        "SELECT food_insecurity, housing_instability, transportation_insecurity,
+                financial_strain, social_isolation, employment_status
+         FROM   form_history_sdoh WHERE pid = ? ORDER BY created_at DESC LIMIT 1",
+        [$pid]
+    );
+
+    // ── Build API payload ─────────────────────────────────────────────────
+    $payload = [
+        'patient_info' => [
+            'pid'       => $pid,
+            'age'       => $age,
+            'sex'       => $pt['sex']        ?? '',
+            'race'      => $pt['race']       ?? '',
+            'ethnicity' => $pt['ethnicity']  ?? '',
+            'occupation'=> $pt['occupation'] ?? '',
+        ],
+        'current_encounter' => [
+            'encounter_id'    => $enc,
+            'date'            => $enc_row['date']   ?? '',
+            'reason'          => $enc_row['reason'] ?? '',
+            'chief_complaints'=> $ccRows,
+        ],
+        'vitals' => [
+            'latest'  => $vLatest  ?: null,
+            'history' => $vHistory,
+        ],
+        'active_problems'     => $problems,
+        'active_medications'  => $meds,
+        'allergies'           => $allergies,
+        'lab_results' => [
+            'recent_abnormal' => $abnormalLabs,
+            // Empty PHP [] must become {} (object) not [] (array) for Dict[str,Any]
+            'trends'          => $labTrendMap ? $labTrendMap : (object)[],
+        ],
+        'pending_orders'   => $pendingOrders,
+        'family_history'   => [
+            // Same: empty associative array must be {} not []
+            'relatives' => $relativeFlags ? $relativeFlags : (object)[],
+            'details'   => $familyHistory,
+        ],
+        'social_history'   => $socialRow ? [
+            'tobacco_status'           => $socialRow['tobacco_status']   ?? null,
+            'alcohol_status'           => $socialRow['alcohol_status']   ?? null,
+            'alcohol_drinks_per_week'  => $socialRow['alcohol_drinks_per_week'] !== null && $socialRow['alcohol_drinks_per_week'] !== ''
+                                          ? (float)$socialRow['alcohol_drinks_per_week'] : null,
+            'exercise_frequency'       => $socialRow['exercise_frequency'] ?? null,
+        ] : null,
+        // $screenings is a flat assoc array — pass as object or null (not [])
+        'overdue_screenings' => $screenings ? (object)$screenings : null,
+        'immunizations'    => $immunizations,
+        'surgical_history' => $surgicalHistory,
+        'last_visit'       => $lastVisit   ?: null,
+        'sdoh'             => $sdoh        ?: null,
+    ];
+
+    // ── Call FastAPI /summary ─────────────────────────────────────────────
+    $ch = curl_init('http://localhost:8000/patient_summary');
+    if ($ch === false) {
+        echo json_encode(['error' => 'cURL unavailable']); break;
+    }
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => json_encode($payload, JSON_UNESCAPED_UNICODE),
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'Accept: application/json'],
+        CURLOPT_TIMEOUT        => 90,
+        CURLOPT_CONNECTTIMEOUT => 5,
+    ]);
+    $sumRaw  = curl_exec($ch);
+    $sumCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    // Connection failed or API not yet running
+    if (!$sumRaw || $sumCode === 0 || $sumCode === 404 || $sumCode === 503) {
+        echo json_encode([
+            'unavailable' => true,
+            'message'     => 'AI Summary API is not yet available. Please check back once the service is running.',
+        ]);
+        break;
+    }
+    // Pydantic / request validation error — return details for debugging
+    if ($sumCode === 422) {
+        $detail = json_decode($sumRaw, true);
+        error_log('[Synapta summary] 422 from FastAPI: ' . $sumRaw);
+        echo json_encode([
+            'unavailable' => true,
+            'message'     => 'API validation error (422). Check server log for details.',
+            'debug_422'   => $detail,
+            'payload_sent'=> $payload,
+        ]);
+        break;
+    }
+    if ($sumCode !== 200) {
+        echo json_encode([
+            'unavailable' => true,
+            'message'     => 'AI Summary API returned HTTP ' . $sumCode . '. Service may be starting up.',
+        ]);
+        break;
+    }
+
+    $sumDec = json_decode($sumRaw, true);
+    if (!$sumDec) {
+        echo json_encode([
+            'unavailable' => true,
+            'message'     => 'AI Summary API returned an invalid response.',
+        ]);
+        break;
+    }
+
+    echo json_encode(['success' => true, 'data' => $sumDec]);
+    break;
+
   default:
     echo json_encode(['error' => 'Unknown action']);
 }
