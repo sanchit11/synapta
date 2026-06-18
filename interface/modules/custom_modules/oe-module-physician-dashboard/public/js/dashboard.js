@@ -247,6 +247,15 @@ history.forEach((h, i) => {
 
   return `
 
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+      <button onclick="sydOpenVitalsForm()" style="
+        background:#0F6E56;color:#fff;border:none;border-radius:8px;
+        padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;
+        display:flex;align-items:center;gap:5px;letter-spacing:.3px;">
+        ＋ Add Vitals
+      </button>
+    </div>
+
     <div class="syd-section-label">
       Current Encounter — ${v.date}
     </div>
@@ -388,6 +397,14 @@ const SYD_PANELS = {
 
   render: () => `
     <div id="syd-vitals-panel">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+        <button onclick="sydOpenVitalsForm()" style="
+          background:#0F6E56;color:#fff;border:none;border-radius:8px;
+          padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;
+          display:flex;align-items:center;gap:5px;letter-spacing:.3px;">
+          ＋ Add Vitals
+        </button>
+      </div>
       <div class="syd-loading-container">
         <svg class="syd-hourglass-spinner" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path class="hourglass-frame" d="M5 2h14v2H5V2zm0 18h14v2H5v-2z" />
@@ -1988,6 +2005,50 @@ function sydShowToast(msg, bg = '#1D9E75', ms = 2800) {
   t.style.background = bg;
   t.style.opacity    = '1';
   _toastTimer = setTimeout(() => { t.style.opacity = '0'; }, ms);
+}
+
+// ═══════════════════════════════════════════════════════
+//  VITALS FORM POPUP — open & refresh PVI on close
+// ═══════════════════════════════════════════════════════
+function sydOpenVitalsForm() {
+  if (typeof SYD === 'undefined' || !SYD.pid || !SYD.encounter) {
+    sydShowToast('❌ No active patient / encounter', '#A32D2D');
+    return;
+  }
+
+  const url = SYD.webroot
+    + '/interface/forms/vitals/new.php'
+    + '?set_encounter=' + encodeURIComponent(SYD.encounter)
+    + '&pid='           + encodeURIComponent(SYD.pid);
+
+  const popup = window.open(
+    url,
+    'sydAddVitals',
+    'width=860,height=680,scrollbars=yes,resizable=yes,toolbar=no,menubar=no'
+  );
+
+  if (!popup) {
+    sydShowToast('❌ Popup blocked — please allow popups for this site', '#A32D2D');
+    return;
+  }
+
+  sydShowToast('📋 Vitals form opened — save to refresh Pre-Visit Intelligence', '#1D9E75');
+
+  // Poll every 600 ms; when the popup closes, reload vitals panel + PVI
+  const _poll = setInterval(() => {
+    if (!popup || popup.closed) {
+      clearInterval(_poll);
+
+      // 1. Reload the vitals panel (right-column detail)
+      if (typeof sydCurrentPanel !== 'undefined' && sydCurrentPanel === 'vitals') {
+        sydLoadPanelData('vitals');
+      }
+
+      // 2. Re-run vital_trends AI and re-render PVI
+      sydShowToast('🔄 Vitals saved — updating Pre-Visit Intelligence…', '#534AB7');
+      sydLoadVitalTrendsAI();
+    }
+  }, 600);
 }
 
 // ═══════════════════════════════════════════════════════
